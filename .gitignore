@@ -35,3 +35,13 @@ packages/db/prisma/migrations/*_migration_lock.toml
 # Testing
 coverage
 .nyc_output
+
+node_modules/
+.env
+.env.*
+.next/
+dist/
+turbo/
+.turbo/
+coverage/
+.DS_Store
