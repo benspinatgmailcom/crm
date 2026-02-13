@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProviderWrapper } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
   title: "CRM",
@@ -13,7 +14,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <AuthProviderWrapper>{children}</AuthProviderWrapper>
+      </body>
     </html>
   );
 }

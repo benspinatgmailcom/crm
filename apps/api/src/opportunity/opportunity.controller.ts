@@ -1,7 +1,9 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Opportunity } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/constants';
 import { OpportunityService } from './opportunity.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { QueryOpportunityDto } from './dto/query-opportunity.dto';
@@ -9,10 +11,12 @@ import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
 
 @ApiTags('Opportunity')
 @Controller('opportunities')
+@ApiBearerAuth()
 export class OpportunityController {
   constructor(private readonly opportunityService: OpportunityService) {}
 
   @Post()
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Create opportunity' })
   @ApiResponse({ status: 201, description: 'Opportunity created' })
   @ApiResponse({ status: 400, description: 'Validation error' })
@@ -22,6 +26,7 @@ export class OpportunityController {
   }
 
   @Get()
+  @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
   @ApiOperation({ summary: 'List opportunities (paginated)' })
   @ApiResponse({ status: 200, description: 'Paginated list of opportunities' })
   findAll(@Query() query: QueryOpportunityDto): Promise<PaginatedResult<Opportunity>> {
@@ -29,6 +34,7 @@ export class OpportunityController {
   }
 
   @Get(':id')
+  @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
   @ApiOperation({ summary: 'Get opportunity by ID' })
   @ApiResponse({ status: 200, description: 'Opportunity found' })
   @ApiResponse({ status: 404, description: 'Opportunity not found' })
@@ -37,6 +43,7 @@ export class OpportunityController {
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Update opportunity' })
   @ApiResponse({ status: 200, description: 'Opportunity updated' })
   @ApiResponse({ status: 404, description: 'Opportunity not found' })
@@ -45,6 +52,7 @@ export class OpportunityController {
   }
 
   @Delete(':id')
+  @Roles(Role.ADMIN, Role.USER)
   @ApiOperation({ summary: 'Delete opportunity' })
   @ApiResponse({ status: 204, description: 'Opportunity deleted' })
   @ApiResponse({ status: 404, description: 'Opportunity not found' })
