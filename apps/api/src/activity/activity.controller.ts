@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Activity } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -17,17 +17,30 @@ export class ActivityController {
 
   @Post()
   @Roles(Role.ADMIN, Role.USER)
-  @ApiOperation({ summary: 'Create activity (polymorphic)' })
+  @ApiOperation({
+    summary: 'Create activity',
+    description:
+      'Creates an activity for an entity. Payload schema depends on type: note {text}, call/meeting {summary?, outcome?, nextStep?}, email {subject?, body?, direction?}, task {title, dueAt?, status?}, ai_summary {text, sources?}.',
+  })
   @ApiResponse({ status: 201, description: 'Activity created' })
-  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 400, description: 'Validation error (entityType, entityId, type, or payload)' })
   create(@Body() dto: CreateActivityDto): Promise<Activity> {
     return this.activityService.create(dto);
   }
 
   @Get()
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
-  @ApiOperation({ summary: 'List activities (paginated)' })
-  @ApiResponse({ status: 200, description: 'Paginated list of activities' })
+  @ApiOperation({
+    summary: 'List activities (paginated)',
+    description:
+      'List activities. For timeline usage, provide both entityType and entityId. Optional type filter: single or comma-separated (e.g. note,call).',
+  })
+  @ApiQuery({ name: 'entityType', required: false, enum: ['account', 'contact', 'lead', 'opportunity'] })
+  @ApiQuery({ name: 'entityId', required: false, description: 'Entity ID (use with entityType for timeline)' })
+  @ApiQuery({ name: 'type', required: false, description: 'Filter by type(s), e.g. note or note,call,meeting' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'pageSize', required: false, example: 20 })
+  @ApiResponse({ status: 200, description: 'Paginated list: { data: Activity[], page, pageSize, total }' })
   findAll(@Query() query: QueryActivityDto): Promise<PaginatedResult<Activity>> {
     return this.activityService.findAll(query);
   }

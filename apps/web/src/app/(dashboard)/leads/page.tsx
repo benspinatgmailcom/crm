@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
+import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { leadSchema, type LeadFormData } from "@/lib/validation";
@@ -343,28 +344,31 @@ export default function LeadsPage() {
 
       <Modal isOpen={!!viewing} onClose={() => setViewing(null)} title="Lead Details">
         {viewing && (
-          <dl className="space-y-2">
-            <div>
-              <dt className="text-sm text-gray-500">Name</dt>
-              <dd className="text-sm font-medium">{viewing.name}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Email</dt>
-              <dd className="text-sm">{viewing.email}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Company</dt>
-              <dd className="text-sm">{viewing.company ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Status</dt>
-              <dd className="text-sm">{viewing.status ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Source</dt>
-              <dd className="text-sm">{viewing.source ?? "—"}</dd>
-            </div>
-          </dl>
+          <>
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-sm text-gray-500">Name</dt>
+                <dd className="text-sm font-medium">{viewing.name}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Email</dt>
+                <dd className="text-sm">{viewing.email}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Company</dt>
+                <dd className="text-sm">{viewing.company ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Status</dt>
+                <dd className="text-sm">{viewing.status ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Source</dt>
+                <dd className="text-sm">{viewing.source ?? "—"}</dd>
+              </div>
+            </dl>
+            <ActivityTimeline entityType="lead" entityId={viewing.id} />
+          </>
         )}
       </Modal>
 

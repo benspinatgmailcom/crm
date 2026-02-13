@@ -61,14 +61,17 @@ model Opportunity {
 }
 
 model Activity {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   entityType String
   entityId   String
-  type       String   // call, email, meeting, etc.
-  payload    Json?    @default("{}")
-  createdAt  DateTime @default(now())
+  type       String    // note, call, meeting, email, task, ai_summary
+  payload    Json?     @default("{}")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
 
   @@index([entityType, entityId])
+  @@index([entityType, entityId, createdAt])
 }
 
 model User {

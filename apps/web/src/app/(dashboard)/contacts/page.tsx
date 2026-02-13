@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
+import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { contactSchema, type ContactFormData } from "@/lib/validation";
@@ -394,26 +395,29 @@ export default function ContactsPage() {
 
       <Modal isOpen={!!viewing} onClose={() => setViewing(null)} title="Contact Details">
         {viewing && (
-          <dl className="space-y-2">
-            <div>
-              <dt className="text-sm text-gray-500">Name</dt>
-              <dd className="text-sm font-medium">
-                {viewing.firstName} {viewing.lastName}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Email</dt>
-              <dd className="text-sm">{viewing.email}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Account</dt>
-              <dd className="text-sm">{accountName(viewing.accountId)}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Phone</dt>
-              <dd className="text-sm">{viewing.phone ?? "—"}</dd>
-            </div>
-          </dl>
+          <>
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-sm text-gray-500">Name</dt>
+                <dd className="text-sm font-medium">
+                  {viewing.firstName} {viewing.lastName}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Email</dt>
+                <dd className="text-sm">{viewing.email}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Account</dt>
+                <dd className="text-sm">{accountName(viewing.accountId)}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Phone</dt>
+                <dd className="text-sm">{viewing.phone ?? "—"}</dd>
+              </div>
+            </dl>
+            <ActivityTimeline entityType="contact" entityId={viewing.id} />
+          </>
         )}
       </Modal>
 

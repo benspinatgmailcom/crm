@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
+import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { accountSchema, type AccountFormData } from "@/lib/validation";
@@ -300,20 +301,23 @@ export default function AccountsPage() {
         title="Account Details"
       >
         {viewing && (
-          <dl className="space-y-2">
-            <div>
-              <dt className="text-sm text-gray-500">Name</dt>
-              <dd className="text-sm font-medium">{viewing.name}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Industry</dt>
-              <dd className="text-sm">{viewing.industry ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Website</dt>
-              <dd className="text-sm">{viewing.website ?? "—"}</dd>
-            </div>
-          </dl>
+          <>
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-sm text-gray-500">Name</dt>
+                <dd className="text-sm font-medium">{viewing.name}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Industry</dt>
+                <dd className="text-sm">{viewing.industry ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Website</dt>
+                <dd className="text-sm">{viewing.website ?? "—"}</dd>
+              </div>
+            </dl>
+            <ActivityTimeline entityType="account" entityId={viewing.id} />
+          </>
         )}
       </Modal>
 
