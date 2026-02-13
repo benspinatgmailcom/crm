@@ -64,6 +64,22 @@ pnpm db:migrate # Create migration
 pnpm db:studio  # Prisma Studio UI
 ```
 
+### Authentication
+
+1. Copy `apps/api/.env.example` to `apps/api/.env` (optional, for JWT config)
+2. Set `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` (required in production)
+3. First user registration creates an ADMIN; subsequent registrations require ADMIN auth
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /auth/register` | Register (first user = ADMIN, else requires ADMIN) |
+| `POST /auth/login` | Login, returns access + refresh tokens |
+| `POST /auth/refresh` | Exchange refresh token for new tokens |
+| `POST /auth/logout` | Revoke refresh token |
+| `GET /auth/me` | Current user (requires Bearer token) |
+
+CRUD routes require JWT. Use Swagger "Authorize" with the access token.
+
 ## Scripts
 
 | Command       | Description                    |

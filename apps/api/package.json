@@ -13,6 +13,11 @@
     "@crm/db": "workspace:*",
     "@crm/shared": "workspace:*",
     "@nestjs/common": "^10.4.15",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/passport": "^10.0.3",
+    "bcrypt": "^5.1.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
     "@nestjs/mapped-types": "^2.0.4",
     "@nestjs/swagger": "^8.0.7",
     "class-transformer": "^0.5.1",
@@ -25,6 +30,8 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
+    "@types/bcrypt": "^5.0.2",
+    "@types/passport-jwt": "^4.0.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "typescript": "^5.6.3"

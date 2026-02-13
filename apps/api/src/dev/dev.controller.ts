@@ -1,9 +1,11 @@
 import { ForbiddenException, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Public } from '../auth/decorators/public.decorator';
 import { DevService } from './dev.service';
 
 @ApiTags('Dev')
 @Controller('dev')
+@Public()
 export class DevController {
   constructor(private readonly devService: DevService) {}
 

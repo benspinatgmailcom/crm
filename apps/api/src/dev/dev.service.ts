@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -7,11 +8,22 @@ export class DevService {
 
   async seed(): Promise<{ message: string; counts: Record<string, number> }> {
     // Clear existing data (order matters for FK)
+    await this.prisma.refreshToken.deleteMany();
     await this.prisma.activity.deleteMany();
     await this.prisma.opportunity.deleteMany();
     await this.prisma.contact.deleteMany();
     await this.prisma.lead.deleteMany();
     await this.prisma.account.deleteMany();
+    await this.prisma.user.deleteMany();
+
+    const passwordHash = await bcrypt.hash('Admin123!', 12);
+    await this.prisma.user.create({
+      data: {
+        email: 'admin@example.com',
+        passwordHash,
+        role: 'ADMIN',
+      },
+    });
 
     const account1 = await this.prisma.account.create({
       data: {
@@ -121,6 +133,7 @@ export class DevService {
     ]);
 
     const counts = {
+      users: 1,
       accounts: 2,
       contacts: 2,
       leads: 2,

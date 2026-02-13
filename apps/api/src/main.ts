@@ -15,6 +15,8 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({ origin: true }); // Allow same-origin and localhost dev origins
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -27,8 +29,10 @@ async function bootstrap() {
   const swagger = new DocumentBuilder()
     .setTitle('CRM API')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
-  SwaggerModule.setup('api', app, SwaggerModule.createDocument(app, swagger));
+  const document = SwaggerModule.createDocument(app, swagger);
+  SwaggerModule.setup('api', app, document);
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
