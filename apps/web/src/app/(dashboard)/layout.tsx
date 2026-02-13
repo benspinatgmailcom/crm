@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
+import { ApiStatus } from "@/components/api-status";
 
 const navItems = [
   { href: "/accounts", label: "Accounts" },
@@ -72,7 +73,7 @@ export default function DashboardLayout({
       <div className="flex flex-1 flex-col">
         {/* Top bar */}
         <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4">
-          <div className="flex-1" />
+          <ApiStatus />
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600">{user?.email}</span>
             <button

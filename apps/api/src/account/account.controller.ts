@@ -27,8 +27,14 @@ export class AccountController {
 
   @Get()
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
-  @ApiOperation({ summary: 'List accounts (paginated)' })
-  @ApiResponse({ status: 200, description: 'Paginated list of accounts' })
+  @ApiOperation({
+    summary: 'List accounts (paginated)',
+    description: 'Query params: page (default 1), pageSize (default 20), name (contains), industry (contains), sortBy (name|createdAt), sortDir (asc|desc)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns { data, page, pageSize, total }',
+  })
   findAll(@Query() query: QueryAccountDto): Promise<PaginatedResult<Account>> {
     return this.accountService.findAll(query);
   }

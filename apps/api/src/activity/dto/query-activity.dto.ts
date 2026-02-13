@@ -29,5 +29,5 @@ export class QueryActivityDto extends PaginationDto {
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
   @IsOptional()
   @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc' = 'desc';
+  sortDir?: 'asc' | 'desc' = 'desc';
 }

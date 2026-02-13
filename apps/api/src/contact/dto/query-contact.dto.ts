@@ -13,13 +13,18 @@ export class QueryContactDto extends PaginationDto {
   @IsString()
   accountId?: string;
 
-  @ApiPropertyOptional({ enum: ['firstName', 'lastName', 'createdAt'], default: 'createdAt' })
+  @ApiPropertyOptional({ description: 'Filter by email (contains)' })
   @IsOptional()
-  @IsIn(['firstName', 'lastName', 'createdAt'])
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({ enum: ['firstName', 'lastName', 'email', 'createdAt'], default: 'createdAt' })
+  @IsOptional()
+  @IsIn(['firstName', 'lastName', 'email', 'createdAt'])
   sortBy?: string = 'createdAt';
 
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
   @IsOptional()
   @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc' = 'desc';
+  sortDir?: 'asc' | 'desc' = 'desc';
 }

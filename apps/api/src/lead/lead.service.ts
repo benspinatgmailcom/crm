@@ -30,31 +30,29 @@ export class LeadService {
   }
 
   async findAll(query: QueryLeadDto): Promise<PaginatedResult<Lead>> {
-    const { page = 1, pageSize = 20, name, status, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const { page = 1, pageSize = 20, status, q, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
     const where: Prisma.LeadWhereInput = {};
-    if (name) where.name = { contains: name, mode: 'insensitive' };
     if (status) where.status = status;
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
+        { company: { contains: q, mode: 'insensitive' } },
+      ];
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.lead.findMany({
         where,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.lead.count({ where }),
     ]);
 
-    return {
-      data,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    return { data, page, pageSize, total };
   }
 
   async findOne(id: string): Promise<Lead> {

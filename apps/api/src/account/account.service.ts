@@ -28,7 +28,7 @@ export class AccountService {
   }
 
   async findAll(query: QueryAccountDto): Promise<PaginatedResult<Account>> {
-    const { page = 1, pageSize = 20, name, industry, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const { page = 1, pageSize = 20, name, industry, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
     const where: Prisma.AccountWhereInput = {};
     if (name) where.name = { contains: name, mode: 'insensitive' };
@@ -37,22 +37,14 @@ export class AccountService {
     const [data, total] = await Promise.all([
       this.prisma.account.findMany({
         where,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.account.count({ where }),
     ]);
 
-    return {
-      data,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    return { data, page, pageSize, total };
   }
 
   async findOne(id: string): Promise<Account> {

@@ -33,36 +33,32 @@ export class ContactService {
   }
 
   async findAll(query: QueryContactDto): Promise<PaginatedResult<Contact>> {
-    const { page = 1, pageSize = 20, name, accountId, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const { page = 1, pageSize = 20, name, accountId, email, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
-    const where: Prisma.ContactWhereInput = {};
-    if (accountId) where.accountId = accountId;
+    const and: Prisma.ContactWhereInput[] = [];
+    if (accountId) and.push({ accountId });
+    if (email) and.push({ email: { contains: email, mode: 'insensitive' } });
     if (name) {
-      where.OR = [
-        { firstName: { contains: name, mode: 'insensitive' } },
-        { lastName: { contains: name, mode: 'insensitive' } },
-      ];
+      and.push({
+        OR: [
+          { firstName: { contains: name, mode: 'insensitive' } },
+          { lastName: { contains: name, mode: 'insensitive' } },
+        ],
+      });
     }
+    const where: Prisma.ContactWhereInput = and.length ? { AND: and } : {};
 
     const [data, total] = await Promise.all([
       this.prisma.contact.findMany({
         where,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.contact.count({ where }),
     ]);
 
-    return {
-      data,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    return { data, page, pageSize, total };
   }
 
   async findOne(id: string): Promise<Contact> {

@@ -18,7 +18,7 @@ export class QueryAccountDto extends PaginationDto {
   @IsString()
   industry?: string;
 
-  @ApiPropertyOptional({ enum: AccountSortField, default: AccountSortField.CREATED_AT })
+  @ApiPropertyOptional({ enum: AccountSortField, default: AccountSortField.CREATED_AT, description: 'Sort field' })
   @IsOptional()
   @IsEnum(AccountSortField)
   sortBy?: AccountSortField = AccountSortField.CREATED_AT;
@@ -26,5 +26,5 @@ export class QueryAccountDto extends PaginationDto {
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
   @IsOptional()
   @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc' = 'desc';
+  sortDir?: 'asc' | 'desc' = 'desc';
 }

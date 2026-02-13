@@ -27,7 +27,7 @@ export class OpportunityService {
   }
 
   async findAll(query: QueryOpportunityDto): Promise<PaginatedResult<Opportunity>> {
-    const { page = 1, pageSize = 20, name, accountId, stage, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const { page = 1, pageSize = 20, name, accountId, stage, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
     const where: Prisma.OpportunityWhereInput = {};
     if (accountId) where.accountId = accountId;
@@ -37,22 +37,14 @@ export class OpportunityService {
     const [data, total] = await Promise.all([
       this.prisma.opportunity.findMany({
         where,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.opportunity.count({ where }),
     ]);
 
-    return {
-      data,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    return { data, page, pageSize, total };
   }
 
   async findOne(id: string): Promise<Opportunity> {
