@@ -22,7 +22,7 @@ export class ActivityService {
   }
 
   async findAll(query: QueryActivityDto): Promise<PaginatedResult<Activity>> {
-    const { page = 1, pageSize = 20, entityType, entityId, type, sortBy = 'createdAt', sortOrder = 'desc' } = query;
+    const { page = 1, pageSize = 20, entityType, entityId, type, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
     const where: Prisma.ActivityWhereInput = {};
     if (entityType) where.entityType = entityType;
@@ -32,22 +32,14 @@ export class ActivityService {
     const [data, total] = await Promise.all([
       this.prisma.activity.findMany({
         where,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
       this.prisma.activity.count({ where }),
     ]);
 
-    return {
-      data,
-      meta: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
+    return { data, page, pageSize, total };
   }
 
   async findOne(id: string): Promise<Activity> {

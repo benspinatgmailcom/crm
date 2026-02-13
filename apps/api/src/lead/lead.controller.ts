@@ -27,8 +27,11 @@ export class LeadController {
 
   @Get()
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
-  @ApiOperation({ summary: 'List leads (paginated)' })
-  @ApiResponse({ status: 200, description: 'Paginated list of leads' })
+  @ApiOperation({
+    summary: 'List leads (paginated)',
+    description: 'Query params: page (default 1), pageSize (default 20), status, q (search name/email/company), sortBy (name|createdAt|status), sortDir (asc|desc)',
+  })
+  @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
   findAll(@Query() query: QueryLeadDto): Promise<PaginatedResult<Lead>> {
     return this.leadService.findAll(query);
   }

@@ -27,8 +27,11 @@ export class ContactController {
 
   @Get()
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
-  @ApiOperation({ summary: 'List contacts (paginated)' })
-  @ApiResponse({ status: 200, description: 'Paginated list of contacts' })
+  @ApiOperation({
+    summary: 'List contacts (paginated)',
+    description: 'Query params: page (default 1), pageSize (default 20), accountId, email (contains), name (contains first/last), sortBy (firstName|lastName|email|createdAt), sortDir (asc|desc)',
+  })
+  @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
   findAll(@Query() query: QueryContactDto): Promise<PaginatedResult<Contact>> {
     return this.contactService.findAll(query);
   }

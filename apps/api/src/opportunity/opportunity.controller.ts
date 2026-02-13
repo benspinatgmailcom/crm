@@ -27,8 +27,11 @@ export class OpportunityController {
 
   @Get()
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
-  @ApiOperation({ summary: 'List opportunities (paginated)' })
-  @ApiResponse({ status: 200, description: 'Paginated list of opportunities' })
+  @ApiOperation({
+    summary: 'List opportunities (paginated)',
+    description: 'Query params: page (default 1), pageSize (default 20), accountId, stage, name (contains), sortBy (name|amount|createdAt|closeDate), sortDir (asc|desc)',
+  })
+  @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
   findAll(@Query() query: QueryOpportunityDto): Promise<PaginatedResult<Opportunity>> {
     return this.opportunityService.findAll(query);
   }
