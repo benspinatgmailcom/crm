@@ -23,14 +23,17 @@ export class OpenAiAdapter extends AiAdapter {
       );
     }
 
-    const response = await this.client.chat.completions.create({
+    const systemMsg = messages.find((m) => m.role === 'system')?.content;
+    const userMsg = messages.find((m) => m.role === 'user')?.content ?? '';
+
+    const response = await this.client.responses.create({
       model: this.model,
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      response_format: { type: 'json_object' },
+      ...(systemMsg && { instructions: systemMsg }),
+      input: userMsg,
     });
 
-    const content = response.choices?.[0]?.message?.content;
-    if (!content) {
+    const content = (response as { output_text?: string }).output_text;
+    if (content == null || content === '') {
       throw new Error('Empty response from OpenAI');
     }
     return content;
