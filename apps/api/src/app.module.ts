@@ -14,10 +14,6 @@ import { LeadModule } from './lead/lead.module';
 import { OpportunityModule } from './opportunity/opportunity.module';
 import { ActivityModule } from './activity/activity.module';
 import { AiModule } from './ai/ai.module';
-<<<<<<< HEAD
-=======
-import { UploadModule } from './upload/upload.module';
->>>>>>> feat/next-best-actions
 import { AttachmentsModule } from './attachments/attachments.module';
 
 const devOnly = process.env.NODE_ENV !== 'production';
@@ -32,10 +28,6 @@ const devOnly = process.env.NODE_ENV !== 'production';
     OpportunityModule,
     ActivityModule,
     AiModule,
-<<<<<<< HEAD
-=======
-    UploadModule,
->>>>>>> feat/next-best-actions
     AttachmentsModule,
     ...(devOnly ? [DevModule] : []),
   ],
