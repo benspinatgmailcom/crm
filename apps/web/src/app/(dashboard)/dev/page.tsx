@@ -54,7 +54,7 @@ export default function DevPage() {
   };
 
   const openAccount = (id: string) => {
-    router.push(`/accounts?viewId=${id}`);
+    router.push(`/accounts/${id}`);
   };
 
   if (user && user.role !== "ADMIN") {

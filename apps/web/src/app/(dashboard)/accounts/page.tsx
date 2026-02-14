@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
-import { ActivityTimeline } from "@/components/activity/activity-timeline";
-import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { accountSchema, type AccountFormData } from "@/lib/validation";
@@ -26,6 +24,7 @@ interface PaginatedResponse {
 
 export default function AccountsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const viewId = searchParams.get("viewId");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,8 +46,6 @@ export default function AccountsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<Account | null>(null);
-  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
@@ -78,11 +75,8 @@ export default function AccountsPage() {
   }, [fetchData]);
 
   useEffect(() => {
-    if (!viewId) return;
-    apiFetch<Account>(`/accounts/${viewId}`)
-      .then((account) => setViewing(account))
-      .catch(() => {});
-  }, [viewId]);
+    if (viewId) router.replace(`/accounts/${viewId}`);
+  }, [viewId, router]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -200,26 +194,36 @@ export default function AccountsPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {(data?.data ?? []).map((account) => (
-                  <tr key={account.id}>
+                  <tr
+                    key={account.id}
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => router.push(`/accounts/${account.id}`)}
+                  >
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{account.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{account.industry ?? "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{account.website ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => setViewing(account)}
+                          onClick={() => router.push(`/accounts/${account.id}`)}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           View
                         </button>
                         <button
-                          onClick={() => openEdit(account)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(account);
+                          }}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => setDeleteId(account.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteId(account.id);
+                          }}
                           className="text-sm text-red-600 hover:underline"
                         >
                           Delete
@@ -304,42 +308,6 @@ export default function AccountsPage() {
             </button>
           </div>
         </form>
-      </Modal>
-
-      {/* View Modal */}
-      <Modal
-        isOpen={!!viewing}
-        onClose={() => setViewing(null)}
-        title="Account Details"
-      >
-        {viewing && (
-          <>
-            <dl className="space-y-2">
-              <div>
-                <dt className="text-sm text-gray-500">Name</dt>
-                <dd className="text-sm font-medium">{viewing.name}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Industry</dt>
-                <dd className="text-sm">{viewing.industry ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Website</dt>
-                <dd className="text-sm">{viewing.website ?? "—"}</dd>
-              </div>
-            </dl>
-            <EntityAttachments
-              entityType="account"
-              entityId={viewing.id}
-              onUploadSuccess={() => setTimelineRefreshKey((k) => k + 1)}
-            />
-            <ActivityTimeline
-              entityType="account"
-              entityId={viewing.id}
-              refreshTrigger={timelineRefreshKey}
-            />
-          </>
-        )}
       </Modal>
 
       <ConfirmDialog
