@@ -114,10 +114,20 @@ Return up to ${count} actions, ordered by priority (1 first).`;
     });
   }
 
+  private extractJson(raw: string): string {
+    let s = raw.trim();
+    const codeBlockMatch = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) s = codeBlockMatch[1].trim();
+    const objMatch = s.match(/\{[\s\S]*\}/);
+    if (objMatch) s = objMatch[0];
+    return s;
+  }
+
   private parseNextActionsResponse(raw: string): { actions: NextAction[] } {
+    const jsonStr = this.extractJson(raw);
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(jsonStr);
     } catch {
       throw new BadRequestException('AI returned invalid JSON');
     }

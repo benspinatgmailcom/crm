@@ -7,6 +7,9 @@ import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { accountSchema, type AccountFormData } from "@/lib/validation";
 import { EntityActivityTimeline } from "@/components/activity/entity-activity-timeline";
+import { CreateActivityModal } from "@/components/activity/create-activity-modal";
+import { EntityAttachmentsPanel } from "@/components/activity/entity-attachments-panel";
+import { GenerateAiSummaryModal } from "@/components/ai/generate-ai-summary-modal";
 import { GenerateNextBestActionsModal } from "@/components/ai/generate-next-best-actions-modal";
 
 interface Account {
@@ -46,6 +49,8 @@ export default function AccountsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Account | null>(null);
   const [nextActionsOpen, setNextActionsOpen] = useState(false);
+  const [aiSummaryOpen, setAiSummaryOpen] = useState(false);
+  const [createActivityOpen, setCreateActivityOpen] = useState(false);
   const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -319,7 +324,19 @@ export default function AccountsPage() {
                 <dd className="text-sm">{viewing.website ?? "—"}</dd>
               </div>
             </dl>
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setCreateActivityOpen(true)}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Add Activity
+              </button>
+              <button
+                onClick={() => setAiSummaryOpen(true)}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Generate AI Summary
+              </button>
               <button
                 onClick={() => setNextActionsOpen(true)}
                 className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
@@ -327,10 +344,27 @@ export default function AccountsPage() {
                 Next Best Actions
               </button>
             </div>
+            <EntityAttachmentsPanel
+              entityType="account"
+              entityId={viewing.id}
+              refreshTrigger={timelineRefreshKey}
+              onSuccess={() => setTimelineRefreshKey((k) => k + 1)}
+            />
             <EntityActivityTimeline
               entityType="account"
               entityId={viewing.id}
               refreshTrigger={timelineRefreshKey}
+            />
+            <CreateActivityModal
+              isOpen={createActivityOpen}
+              onClose={() => setCreateActivityOpen(false)}
+              entityType="account"
+              entityId={viewing.id}
+              onSuccess={() => setTimelineRefreshKey((k) => k + 1)}
+            />
+            <GenerateAiSummaryModal
+              isOpen={aiSummaryOpen}
+              onClose={() => setAiSummaryOpen(false)}
             />
             <GenerateNextBestActionsModal
               isOpen={nextActionsOpen}

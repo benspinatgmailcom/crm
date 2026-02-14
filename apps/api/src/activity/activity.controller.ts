@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Activity } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
@@ -51,8 +51,9 @@ export class ActivityController {
   }
 
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   @Roles(Role.ADMIN, Role.USER)
-  @ApiOperation({ summary: 'Delete activity' })
+  @ApiOperation({ summary: 'Delete activity (hard delete)' })
   @ApiResponse({ status: 204, description: 'Activity deleted' })
   @ApiResponse({ status: 404, description: 'Activity not found' })
   async remove(@Param('id') id: string): Promise<void> {
