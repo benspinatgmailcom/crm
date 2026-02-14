@@ -1,17 +1,18 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ActivityModule } from '../activity/activity.module';
-import { AttachmentsModule } from '../attachments/attachments.module';
 import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
+import { AiContextService } from './ai-context.service';
 import { AiAdapter } from './adapter/ai-adapter.interface';
 import { OpenAiAdapter } from './adapter/openai.adapter';
 
 @Module({
-  imports: [PrismaModule, ActivityModule, AttachmentsModule],
+  imports: [PrismaModule, ActivityModule],
   controllers: [AiController],
   providers: [
     AiService,
+    AiContextService,
     { provide: AiAdapter, useClass: OpenAiAdapter },
   ],
 })

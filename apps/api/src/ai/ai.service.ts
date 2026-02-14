@@ -4,223 +4,160 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { Prisma } from '@crm/db';
-import { PrismaService } from '../prisma/prisma.service';
+import { Activity } from '@crm/db';
 import { ActivityService } from '../activity/activity.service';
-import { AttachmentsService } from '../attachments/attachments.service';
 import { AiAdapter } from './adapter/ai-adapter.interface';
-import type { GenerateSummaryDto } from './dto/generate-summary.dto';
+import { AiContextService } from './ai-context.service';
+import type { NextActionsDto } from './dto/next-actions.dto';
 
-const ENTITY_TYPES = ['account', 'contact', 'lead', 'opportunity'] as const;
-
-interface SummaryResult {
-  summaryBullets: string[];
-  risks: string[];
-  nextActions: string[];
-  emailDraft?: { subject: string; body: string };
+export interface NextAction {
+  priority: number;
+  title: string;
+  why: string;
+  suggestedDueAt?: string;
+  type: 'call' | 'email' | 'task' | 'meeting' | 'research';
+  details?: string;
 }
 
-export interface AiSummaryResponse {
+export interface NextActionsResponse {
   activityId: string;
-  summaryBullets: string[];
-  risks: string[];
-  nextActions: string[];
-  emailDraft?: { subject: string; body: string };
+  actions: NextAction[];
 }
+
+const VALID_ACTION_TYPES = ['call', 'email', 'task', 'meeting', 'research'];
 
 @Injectable()
 export class AiService {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly contextService: AiContextService,
     private readonly activityService: ActivityService,
-    private readonly attachmentsService: AttachmentsService,
     private readonly aiAdapter: AiAdapter,
   ) {}
 
-  async generateSummary(dto: GenerateSummaryDto): Promise<AiSummaryResponse> {
-    const { entityType, entityId, days = 30, limit = 50 } = dto;
+  async generateNextActions(dto: NextActionsDto): Promise<NextActionsResponse> {
+    const { entityType, entityId, count = 5 } = dto;
+    const context = await this.contextService.buildContextPack(
+      entityType,
+      entityId,
+      30,
+      50,
+    );
 
-    const [entityText, activitiesText, attachmentText] = await Promise.all([
-      this.loadEntitySnapshot(entityType, entityId),
-      this.loadActivitiesText(entityType, entityId, days, limit),
-      this.attachmentsService.getExtractedTextForEntity(
-        entityType,
-        entityId,
-        2,
-        8000,
-      ),
-    ]);
+    const systemPrompt = `You are a CRM assistant. Given entity data and recent activities, suggest the next best actions.
 
-    const context = `## Entity snapshot\n${entityText}\n\n## Recent activities\n${activitiesText}${attachmentText}`;
-
-    const systemPrompt = `You are a CRM assistant. Given a CRM entity and its recent activities, produce a concise summary.
-
-Respond with STRICT JSON only, no markdown or extra text. Schema:
+Respond with STRICT JSON only. Schema:
 {
-  "summaryBullets": ["bullet 1", "bullet 2", ...],
-  "risks": ["risk 1", "risk 2", ...],
-  "nextActions": ["action 1", "action 2", ...],
-  "emailDraft": { "subject": "...", "body": "..." }  // optional, suggested follow-up email
+  "actions": [
+    {
+      "priority": 1-5 (1 = highest),
+      "title": "short action title",
+      "why": "brief rationale",
+      "suggestedDueAt": "ISO date string (optional)",
+      "type": "call"|"email"|"task"|"meeting"|"research",
+      "details": "optional extra context"
+    }
+  ]
 }
 
-Keep bullets, risks, and nextActions short and actionable. Include emailDraft only if it makes sense.`;
+Return up to ${count} actions, ordered by priority (1 first).`;
 
-    let rawResponse: string;
+    let raw: string;
     try {
-      rawResponse = await this.aiAdapter.chat([
+      raw = await this.aiAdapter.chat([
         { role: 'system', content: systemPrompt },
         { role: 'user', content: context },
       ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'AI request failed';
-      throw new ServiceUnavailableException(`AI summary failed: ${msg}`);
+      throw new ServiceUnavailableException(`Next actions failed: ${msg}`);
     }
 
-    const parsed = this.parseSummaryResponse(rawResponse);
-    const scope = `Last ${days} days, up to ${limit} activities`;
-    const generatedAt = new Date().toISOString();
-
+    const parsed = this.parseNextActionsResponse(raw);
     const activity = await this.activityService.createRaw({
       entityType,
       entityId,
-      type: 'ai_summary',
+      type: 'ai_recommendation',
       payload: {
-        summaryBullets: parsed.summaryBullets,
-        risks: parsed.risks,
-        nextActions: parsed.nextActions,
-        emailDraft: parsed.emailDraft,
-        scope,
-        generatedAt,
-        text: parsed.summaryBullets.join(' • ') || 'AI summary',
+        actions: parsed.actions,
+        generatedAt: new Date().toISOString(),
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        inputs: { activityCount: 50, attachmentCount: 0 },
       },
     });
 
-    return {
-      activityId: activity.id,
-      summaryBullets: parsed.summaryBullets,
-      risks: parsed.risks,
-      nextActions: parsed.nextActions,
-      emailDraft: parsed.emailDraft,
-    };
+    return { activityId: activity.id, actions: parsed.actions };
   }
 
-  private async loadEntitySnapshot(
-    entityType: (typeof ENTITY_TYPES)[number],
-    entityId: string,
-  ): Promise<string> {
-    switch (entityType) {
-      case 'account': {
-        const a = await this.prisma.account.findUnique({
-          where: { id: entityId },
-        });
-        if (!a) throw new NotFoundException(`Account ${entityId} not found`);
-        return `Account: ${a.name}\nIndustry: ${a.industry ?? '—'}\nWebsite: ${a.website ?? '—'}\nCreated: ${a.createdAt.toISOString()}`;
-      }
-      case 'contact': {
-        const c = await this.prisma.contact.findUnique({
-          where: { id: entityId },
-          include: { account: true },
-        });
-        if (!c) throw new NotFoundException(`Contact ${entityId} not found`);
-        return `Contact: ${c.firstName} ${c.lastName}\nEmail: ${c.email}\nPhone: ${c.phone ?? '—'}\nAccount: ${c.account.name}\nCreated: ${c.createdAt.toISOString()}`;
-      }
-      case 'lead': {
-        const l = await this.prisma.lead.findUnique({
-          where: { id: entityId },
-        });
-        if (!l) throw new NotFoundException(`Lead ${entityId} not found`);
-        return `Lead: ${l.name}\nEmail: ${l.email}\nCompany: ${l.company ?? '—'}\nStatus: ${l.status ?? '—'}\nSource: ${l.source ?? '—'}\nCreated: ${l.createdAt.toISOString()}`;
-      }
-      case 'opportunity': {
-        const o = await this.prisma.opportunity.findUnique({
-          where: { id: entityId },
-          include: { account: true },
-        });
-        if (!o) throw new NotFoundException(`Opportunity ${entityId} not found`);
-        const amount = o.amount != null ? Number(o.amount) : null;
-        return `Opportunity: ${o.name}\nAccount: ${o.account.name}\nAmount: ${amount != null ? '$' + amount.toLocaleString() : '—'}\nStage: ${o.stage ?? '—'}\nProbability: ${o.probability ?? '—'}%\nClose: ${o.closeDate?.toISOString() ?? '—'}\nCreated: ${o.createdAt.toISOString()}`;
-      }
-      default:
-        throw new BadRequestException(`Unknown entityType: ${entityType}`);
+  async convertToTask(activityId: string, actionIndex: number): Promise<Activity> {
+    const activity = await this.activityService.findOne(activityId);
+    if (activity.type !== 'ai_recommendation') {
+      throw new BadRequestException('Activity is not an AI recommendation');
     }
-  }
+    const p = (activity.payload as Record<string, unknown>) ?? {};
+    const actions = p.actions as NextAction[] | undefined;
+    if (!Array.isArray(actions) || actionIndex >= actions.length) {
+      throw new BadRequestException('Invalid action index');
+    }
+    const action = actions[actionIndex] as NextAction;
 
-  private async loadActivitiesText(
-    entityType: string,
-    entityId: string,
-    days: number,
-    limit: number,
-  ): Promise<string> {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-
-    const activities = await this.prisma.activity.findMany({
-      where: {
-        entityType,
-        entityId,
-        deletedAt: null,
-        createdAt: { gte: since },
+    return this.activityService.createRaw({
+      entityType: activity.entityType,
+      entityId: activity.entityId,
+      type: 'task',
+      payload: {
+        title: action.title,
+        status: 'open',
+        dueAt: action.suggestedDueAt ?? undefined,
+        source: { aiRecommendationActivityId: activityId, actionIndex },
+        details: action.details,
       },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
     });
-
-    if (activities.length === 0) {
-      return '(No activities in this period)';
-    }
-
-    return activities
-      .map((a) => {
-        const p = (a.payload as Record<string, unknown>) ?? {};
-        const date = a.createdAt.toISOString();
-        const type = a.type;
-        const parts: string[] = [];
-        if (type === 'note' && p.text) parts.push(String(p.text));
-        if ((type === 'call' || type === 'meeting') && p.summary) parts.push(String(p.summary));
-        if (type === 'email') parts.push(`Subject: ${p.subject ?? '—'}`);
-        if (type === 'task') parts.push(`Task: ${p.title ?? '—'} (${p.status ?? '—'})`);
-        if (type === 'ai_summary') {
-          const bullets = p.summaryBullets as string[] | undefined;
-          parts.push(bullets?.length ? bullets.join('; ') : String(p.text ?? ''));
-        }
-        if (type === 'file_uploaded') parts.push(`File: ${p.fileName ?? '—'}`);
-        if (type === 'file_deleted') parts.push(`Deleted: ${p.fileName ?? '—'}`);
-        return `[${date}] ${type}: ${parts.join(' ').trim() || JSON.stringify(p)}`;
-      })
-      .join('\n');
   }
 
-  private parseSummaryResponse(raw: string): SummaryResult {
+  private extractJson(raw: string): string {
+    let s = raw.trim();
+    const codeBlockMatch = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) s = codeBlockMatch[1].trim();
+    const objMatch = s.match(/\{[\s\S]*\}/);
+    if (objMatch) s = objMatch[0];
+    return s;
+  }
+
+  private parseNextActionsResponse(raw: string): { actions: NextAction[] } {
+    const jsonStr = this.extractJson(raw);
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw);
+      parsed = JSON.parse(jsonStr);
     } catch {
       throw new BadRequestException('AI returned invalid JSON');
     }
-
     if (!parsed || typeof parsed !== 'object') {
       throw new BadRequestException('AI response must be an object');
     }
-
     const o = parsed as Record<string, unknown>;
-    const summaryBullets = Array.isArray(o.summaryBullets)
-      ? o.summaryBullets.filter((x) => typeof x === 'string').map(String)
-      : [];
-    const risks = Array.isArray(o.risks)
-      ? o.risks.filter((x) => typeof x === 'string').map(String)
-      : [];
-    const nextActions = Array.isArray(o.nextActions)
-      ? o.nextActions.filter((x) => typeof x === 'string').map(String)
-      : [];
-
-    let emailDraft: { subject: string; body: string } | undefined;
-    if (o.emailDraft && typeof o.emailDraft === 'object') {
-      const ed = o.emailDraft as Record<string, unknown>;
-      if (typeof ed.subject === 'string' && typeof ed.body === 'string') {
-        emailDraft = { subject: ed.subject, body: ed.body };
-      }
+    const actionsRaw = o.actions;
+    if (!Array.isArray(actionsRaw)) {
+      throw new BadRequestException('actions must be an array');
     }
-
-    return { summaryBullets, risks, nextActions, emailDraft };
+    const actions: NextAction[] = [];
+    for (const a of actionsRaw) {
+      if (!a || typeof a !== 'object') continue;
+      const x = a as Record<string, unknown>;
+      const priority = typeof x.priority === 'number' ? Math.max(1, Math.min(5, x.priority)) : 1;
+      const title = typeof x.title === 'string' ? x.title : String(x.title ?? '');
+      const why = typeof x.why === 'string' ? x.why : '';
+      const type = typeof x.type === 'string' && VALID_ACTION_TYPES.includes(x.type)
+        ? x.type
+        : 'task';
+      actions.push({
+        priority,
+        title,
+        why,
+        suggestedDueAt: typeof x.suggestedDueAt === 'string' ? x.suggestedDueAt : undefined,
+        type: type as NextAction['type'],
+        details: typeof x.details === 'string' ? x.details : undefined,
+      });
+    }
+    return { actions };
   }
 }

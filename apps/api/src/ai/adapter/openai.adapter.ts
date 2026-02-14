@@ -22,16 +22,13 @@ export class OpenAiAdapter extends AiAdapter {
         'OPENAI_API_KEY is not set. Add it to your .env file to use AI features.',
       );
     }
-
     const systemMsg = messages.find((m) => m.role === 'system')?.content;
     const userMsg = messages.find((m) => m.role === 'user')?.content ?? '';
-
     const response = await this.client.responses.create({
       model: this.model,
       ...(systemMsg && { instructions: systemMsg }),
       input: userMsg,
     });
-
     const content = (response as { output_text?: string }).output_text;
     if (content == null || content === '') {
       throw new Error('Empty response from OpenAI');

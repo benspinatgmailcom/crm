@@ -1,9 +1,11 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Activity } from '@crm/db';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
-import { AiService, type AiSummaryResponse } from './ai.service';
-import { GenerateSummaryDto } from './dto/generate-summary.dto';
+import { AiService, type NextActionsResponse } from './ai.service';
+import { ConvertActionDto } from './dto/next-actions.dto';
+import { NextActionsDto } from './dto/next-actions.dto';
 
 @ApiTags('AI')
 @Controller('ai')
@@ -11,18 +13,27 @@ import { GenerateSummaryDto } from './dto/generate-summary.dto';
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
-  @Post('summary')
+  @Post('next-actions')
   @Roles(Role.ADMIN, Role.USER)
-  @ApiOperation({
-    summary: 'Generate AI summary',
-    description:
-      'Generates an AI summary for an entity based on its data and recent activities. Stores the result as an ai_summary activity.',
-  })
-  @ApiResponse({ status: 200, description: 'Summary generated and stored' })
+  @ApiOperation({ summary: 'Generate next best actions' })
+  @ApiResponse({ status: 200, description: 'Returns activityId and actions' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 404, description: 'Entity not found' })
   @ApiResponse({ status: 503, description: 'AI service unavailable' })
-  generateSummary(@Body() dto: GenerateSummaryDto): Promise<AiSummaryResponse> {
-    return this.aiService.generateSummary(dto);
+  generateNextActions(@Body() dto: NextActionsDto): Promise<NextActionsResponse> {
+    return this.aiService.generateNextActions(dto);
+  }
+
+  @Post('next-actions/:activityId/convert')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Convert recommendation action to task' })
+  @ApiResponse({ status: 201, description: 'Task activity created' })
+  @ApiResponse({ status: 400, description: 'Invalid activity or action index' })
+  @ApiResponse({ status: 404, description: 'Activity not found' })
+  convertToTask(
+    @Param('activityId') activityId: string,
+    @Body() dto: ConvertActionDto,
+  ): Promise<Activity> {
+    return this.aiService.convertToTask(activityId, dto.actionIndex);
   }
 }
