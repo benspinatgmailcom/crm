@@ -13,6 +13,8 @@ const navItems = [
   { href: "/opportunities", label: "Opportunities" },
 ];
 
+const isDev = typeof window !== "undefined" && process.env.NODE_ENV !== "production";
+
 export default function DashboardLayout({
   children,
 }: {
@@ -65,6 +67,18 @@ export default function DashboardLayout({
                 {item.label}
               </Link>
             ))}
+            {isDev && user?.role === "ADMIN" && (
+              <Link
+                href="/dev"
+                className={`block rounded-md px-3 py-2 text-sm font-medium ${
+                  pathname === "/dev"
+                    ? "bg-blue-100 text-blue-700"
+                    : "text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                Dev Tools
+              </Link>
+            )}
           </nav>
         </div>
       </aside>
