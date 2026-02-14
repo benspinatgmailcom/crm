@@ -21,13 +21,34 @@ export class ActivityService {
     });
   }
 
+  /** Create activity without validation (e.g. for AI-generated) */
+  async createRaw(data: {
+    entityType: string;
+    entityId: string;
+    type: string;
+    payload: Record<string, unknown>;
+  }): Promise<Activity> {
+    return await this.prisma.activity.create({
+      data: {
+        entityType: data.entityType,
+        entityId: data.entityId,
+        type: data.type,
+        payload: data.payload as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   async findAll(query: QueryActivityDto): Promise<PaginatedResult<Activity>> {
     const { page = 1, pageSize = 20, entityType, entityId, type, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
     const where: Prisma.ActivityWhereInput = {};
     if (entityType) where.entityType = entityType;
     if (entityId) where.entityId = entityId;
-    if (type) where.type = type;
+    if (type) {
+      const types = type.split(',').map((t) => t.trim()).filter(Boolean);
+      if (types.length === 1) where.type = types[0];
+      else if (types.length > 1) where.type = { in: types };
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.activity.findMany({

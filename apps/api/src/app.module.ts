@@ -13,6 +13,7 @@ import { ContactModule } from './contact/contact.module';
 import { LeadModule } from './lead/lead.module';
 import { OpportunityModule } from './opportunity/opportunity.module';
 import { ActivityModule } from './activity/activity.module';
+import { AiModule } from './ai/ai.module';
 
 const devOnly = process.env.NODE_ENV !== 'production';
 
@@ -25,6 +26,7 @@ const devOnly = process.env.NODE_ENV !== 'production';
     LeadModule,
     OpportunityModule,
     ActivityModule,
+    AiModule,
     ...(devOnly ? [DevModule] : []),
   ],
   controllers: [AppController, HealthController],

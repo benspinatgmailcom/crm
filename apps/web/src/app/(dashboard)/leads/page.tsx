@@ -6,6 +6,8 @@ import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { leadSchema, type LeadFormData } from "@/lib/validation";
+import { EntityActivityTimeline } from "@/components/activity/entity-activity-timeline";
+import { GenerateNextBestActionsModal } from "@/components/ai/generate-next-best-actions-modal";
 
 interface Lead {
   id: string;
@@ -50,6 +52,8 @@ export default function LeadsPage() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Lead | null>(null);
+  const [nextActionsOpen, setNextActionsOpen] = useState(false);
+  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(qFilter), 300);
@@ -343,28 +347,50 @@ export default function LeadsPage() {
 
       <Modal isOpen={!!viewing} onClose={() => setViewing(null)} title="Lead Details">
         {viewing && (
-          <dl className="space-y-2">
-            <div>
-              <dt className="text-sm text-gray-500">Name</dt>
-              <dd className="text-sm font-medium">{viewing.name}</dd>
+          <>
+            <dl className="space-y-2">
+              <div>
+                <dt className="text-sm text-gray-500">Name</dt>
+                <dd className="text-sm font-medium">{viewing.name}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Email</dt>
+                <dd className="text-sm">{viewing.email}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Company</dt>
+                <dd className="text-sm">{viewing.company ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Status</dt>
+                <dd className="text-sm">{viewing.status ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-500">Source</dt>
+                <dd className="text-sm">{viewing.source ?? "—"}</dd>
+              </div>
+            </dl>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                onClick={() => setNextActionsOpen(true)}
+                className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Next Best Actions
+              </button>
             </div>
-            <div>
-              <dt className="text-sm text-gray-500">Email</dt>
-              <dd className="text-sm">{viewing.email}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Company</dt>
-              <dd className="text-sm">{viewing.company ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Status</dt>
-              <dd className="text-sm">{viewing.status ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-gray-500">Source</dt>
-              <dd className="text-sm">{viewing.source ?? "—"}</dd>
-            </div>
-          </dl>
+            <EntityActivityTimeline
+              entityType="lead"
+              entityId={viewing.id}
+              refreshTrigger={timelineRefreshKey}
+            />
+            <GenerateNextBestActionsModal
+              isOpen={nextActionsOpen}
+              onClose={() => setNextActionsOpen(false)}
+              entityType="lead"
+              entityId={viewing.id}
+              onSuccess={() => setTimelineRefreshKey((k) => k + 1)}
+            />
+          </>
         )}
       </Modal>
 

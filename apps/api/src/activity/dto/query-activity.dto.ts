@@ -15,11 +15,12 @@ export class QueryActivityDto extends PaginationDto {
   @IsString()
   entityId?: string;
 
-  @ApiPropertyOptional({ description: 'Filter by activity type', enum: ACTIVITY_TYPES })
+  @ApiPropertyOptional({
+    description: 'Filter by activity type (single or comma-separated, e.g. task,ai_recommendation)',
+  })
   @IsOptional()
   @IsString()
-  @IsIn(ACTIVITY_TYPES)
-  type?: (typeof ACTIVITY_TYPES)[number];
+  type?: string;
 
   @ApiPropertyOptional({ enum: ['createdAt', 'type'], default: 'createdAt' })
   @IsOptional()
