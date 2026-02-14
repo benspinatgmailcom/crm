@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Pagination } from "@/components/ui/pagination";
+import { useAuth } from "@/context/auth-context";
 import { AddActivityModal } from "./add-activity-modal";
 import { GenerateAiSummaryModal } from "./generate-ai-summary-modal";
+import { GenerateNextBestActionsModal } from "@/components/ai/generate-next-best-actions-modal";
 
 export type ActivityEntityType = "account" | "contact" | "lead" | "opportunity";
 
@@ -195,8 +197,11 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [typeFilter, setTypeFilter] = useState("");
+  const { user } = useAuth();
+  const canUseNextActions = user?.role === "ADMIN" || user?.role === "USER";
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [aiSummaryModalOpen, setAiSummaryModalOpen] = useState(false);
+  const [nextActionsModalOpen, setNextActionsModalOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const fetchActivities = useCallback(async () => {
@@ -236,6 +241,14 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
     setTimeout(() => setToast(null), 4000);
   };
 
+  const handleNextActionsSuccess = () => {
+    setNextActionsModalOpen(false);
+    setPage(1);
+    fetchActivities();
+    setToast({ type: "success", message: "Next best actions generated." });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   return (
     <div className="mt-4 border-t border-gray-200 pt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -261,6 +274,14 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
           >
             Generate AI Summary
           </button>
+          {canUseNextActions && (
+            <button
+              onClick={() => setNextActionsModalOpen(true)}
+              className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              Next Best Actions
+            </button>
+          )}
           <button
             onClick={() => setAddModalOpen(true)}
             className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
@@ -323,6 +344,15 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
         entityId={entityId}
         onSuccess={handleAiSummarySuccess}
       />
+      {canUseNextActions && (
+        <GenerateNextBestActionsModal
+          isOpen={nextActionsModalOpen}
+          onClose={() => setNextActionsModalOpen(false)}
+          entityType={entityType}
+          entityId={entityId}
+          onSuccess={handleNextActionsSuccess}
+        />
+      )}
     </div>
   );
 }
