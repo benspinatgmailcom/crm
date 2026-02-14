@@ -49,7 +49,10 @@ export function AddActivityModal({
 
   useEffect(() => {
     if (isOpen) {
-      const initialType = presetType && VALID_ACTIVITY_TYPE_VALUES.includes(presetType) ? presetType : "note";
+      const initialType =
+        presetType && VALID_ACTIVITY_TYPE_VALUES.includes(presetType)
+          ? (presetType as (typeof ACTIVITY_TYPES)[number]["value"])
+          : "note";
       setType(initialType);
     }
   }, [isOpen, presetType]);

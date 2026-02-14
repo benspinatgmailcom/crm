@@ -35,6 +35,23 @@ export class ActivityService {
     });
   }
 
+  /** Create activity without payload validation (e.g. for AI-generated ai_summary) */
+  async createRaw(data: {
+    entityType: string;
+    entityId: string;
+    type: string;
+    payload: Record<string, unknown>;
+  }): Promise<Activity> {
+    return await this.prisma.activity.create({
+      data: {
+        entityType: data.entityType,
+        entityId: data.entityId,
+        type: data.type,
+        payload: data.payload as Prisma.InputJsonValue,
+      },
+    });
+  }
+
   async findAll(query: QueryActivityDto): Promise<PaginatedResult<Activity>> {
     const { page = 1, pageSize = 20, entityType, entityId, type, sortBy = 'createdAt', sortDir = 'desc' } = query;
 

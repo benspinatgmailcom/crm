@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Pagination } from "@/components/ui/pagination";
 import { AddActivityModal } from "./add-activity-modal";
+import { GenerateAiSummaryModal } from "./generate-ai-summary-modal";
 
 export type ActivityEntityType = "account" | "contact" | "lead" | "opportunity";
 
@@ -92,15 +93,62 @@ function ActivityItem({ activity }: { activity: Activity }) {
             </div>
           </div>
         );
-      case "ai_summary":
+      case "ai_summary": {
+        const bullets = Array.isArray(p.summaryBullets) ? p.summaryBullets : [];
+        const risks = Array.isArray(p.risks) ? p.risks : [];
+        const nextActions = Array.isArray(p.nextActions) ? p.nextActions : [];
+        const scope = p.scope != null ? String(p.scope) : null;
+        const text = p.text != null ? String(p.text) : "";
+        const hasStructured = bullets.length > 0 || risks.length > 0 || nextActions.length > 0;
         return (
-          <div className="space-y-1">
+          <div className="space-y-2">
             <span className="inline-block rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800">
               AI Summary
             </span>
-            <p className="text-sm text-gray-700">{String(p.text ?? "")}</p>
+            {scope && <p className="text-xs text-gray-500">{scope}</p>}
+            {hasStructured ? (
+              <div className="space-y-1.5 text-sm text-gray-700">
+                {bullets.length > 0 && (
+                  <ul className="list-inside list-disc space-y-0.5">
+                    {bullets.map((b, i) => (
+                      <li key={i}>{String(b)}</li>
+                    ))}
+                  </ul>
+                )}
+                {risks.length > 0 && (
+                  <div>
+                    <span className="font-medium text-amber-700">Risks:</span>
+                    <ul className="list-inside list-disc space-y-0.5">
+                      {risks.map((r, i) => (
+                        <li key={i}>{String(r)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {nextActions.length > 0 && (
+                  <div>
+                    <span className="font-medium text-green-700">Next actions:</span>
+                    <ul className="list-inside list-disc space-y-0.5">
+                      {nextActions.map((a, i) => (
+                        <li key={i}>{String(a)}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {p.emailDraft != null && typeof p.emailDraft === "object" ? (
+                  <div className="rounded border border-gray-200 bg-gray-50 p-2">
+                    <p className="text-xs font-medium text-gray-500">Suggested email</p>
+                    <p className="font-medium">{String((p.emailDraft as { subject?: string }).subject ?? "")}</p>
+                    <p className="line-clamp-2">{String((p.emailDraft as { body?: string }).body ?? "")}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-700">{text}</p>
+            )}
           </div>
         );
+      }
       default:
         return <p className="text-sm text-gray-500">{JSON.stringify(p)}</p>;
     }
@@ -128,6 +176,8 @@ export function ActivityTimeline({ entityType, entityId }: ActivityTimelineProps
   const [pageSize, setPageSize] = useState(10);
   const [typeFilter, setTypeFilter] = useState("");
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [aiSummaryModalOpen, setAiSummaryModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const fetchActivities = useCallback(async () => {
     setLoading(true);
@@ -158,6 +208,14 @@ export function ActivityTimeline({ entityType, entityId }: ActivityTimelineProps
     fetchActivities();
   };
 
+  const handleAiSummarySuccess = () => {
+    setAiSummaryModalOpen(false);
+    setPage(1);
+    fetchActivities();
+    setToast({ type: "success", message: "AI summary generated." });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   return (
     <div className="mt-4 border-t border-gray-200 pt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -178,6 +236,12 @@ export function ActivityTimeline({ entityType, entityId }: ActivityTimelineProps
             ))}
           </select>
           <button
+            onClick={() => setAiSummaryModalOpen(true)}
+            className="rounded-md border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-100"
+          >
+            Generate AI Summary
+          </button>
+          <button
             onClick={() => setAddModalOpen(true)}
             className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
           >
@@ -185,6 +249,18 @@ export function ActivityTimeline({ entityType, entityId }: ActivityTimelineProps
           </button>
         </div>
       </div>
+
+      {toast && (
+        <div
+          className={`mt-3 rounded px-3 py-2 text-sm ${
+            toast.type === "success"
+              ? "bg-green-50 text-green-800"
+              : "bg-red-50 text-red-800"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
 
       {loading ? (
         <p className="mt-3 text-sm text-gray-500">Loading activities...</p>
@@ -219,6 +295,13 @@ export function ActivityTimeline({ entityType, entityId }: ActivityTimelineProps
         entityId={entityId}
         onSuccess={handleActivityAdded}
         presetType={typeFilter || undefined}
+      />
+      <GenerateAiSummaryModal
+        isOpen={aiSummaryModalOpen}
+        onClose={() => setAiSummaryModalOpen(false)}
+        entityType={entityType}
+        entityId={entityId}
+        onSuccess={handleAiSummarySuccess}
       />
     </div>
   );
