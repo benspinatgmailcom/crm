@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
+import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { opportunitySchema, type OpportunityFormData } from "@/lib/validation";
@@ -62,6 +63,7 @@ export default function OpportunitiesPage() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Opportunity | null>(null);
+  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
@@ -475,7 +477,16 @@ export default function OpportunitiesPage() {
                 </dd>
               </div>
             </dl>
-            <ActivityTimeline entityType="opportunity" entityId={viewing.id} />
+            <EntityAttachments
+              entityType="opportunity"
+              entityId={viewing.id}
+              onUploadSuccess={() => setTimelineRefreshKey((k) => k + 1)}
+            />
+            <ActivityTimeline
+              entityType="opportunity"
+              entityId={viewing.id}
+              refreshTrigger={timelineRefreshKey}
+            />
           </>
         )}
       </Modal>

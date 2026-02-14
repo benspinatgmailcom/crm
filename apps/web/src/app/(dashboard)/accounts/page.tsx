@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
+import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { accountSchema, type AccountFormData } from "@/lib/validation";
@@ -44,6 +45,7 @@ export default function AccountsPage() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Account | null>(null);
+  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
@@ -316,7 +318,16 @@ export default function AccountsPage() {
                 <dd className="text-sm">{viewing.website ?? "—"}</dd>
               </div>
             </dl>
-            <ActivityTimeline entityType="account" entityId={viewing.id} />
+            <EntityAttachments
+              entityType="account"
+              entityId={viewing.id}
+              onUploadSuccess={() => setTimelineRefreshKey((k) => k + 1)}
+            />
+            <ActivityTimeline
+              entityType="account"
+              entityId={viewing.id}
+              refreshTrigger={timelineRefreshKey}
+            />
           </>
         )}
       </Modal>

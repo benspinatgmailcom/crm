@@ -32,6 +32,9 @@ pnpm-debug.log*
 # Prisma
 packages/db/prisma/migrations/*_migration_lock.toml
 
+# Uploads (local dev storage)
+apps/api/uploads
+
 # Testing
 coverage
 .nyc_output

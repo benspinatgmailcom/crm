@@ -15,6 +15,7 @@ export const ACTIVITY_TYPES = [
   { value: "meeting", label: "Meeting" },
   { value: "email", label: "Email" },
   { value: "task", label: "Task" },
+  { value: "file_uploaded", label: "File Uploaded" },
   { value: "ai_summary", label: "AI Summary" },
 ] as const;
 
@@ -38,6 +39,8 @@ interface PaginatedResponse {
 interface ActivityTimelineProps {
   entityType: ActivityEntityType;
   entityId: string;
+  /** Change to trigger a refresh (e.g. after attachment upload) */
+  refreshTrigger?: number;
 }
 
 function formatDate(s: string) {
@@ -92,6 +95,23 @@ function ActivityItem({ activity }: { activity: Activity }) {
               ) : null}
             </div>
           </div>
+        );
+      case "file_uploaded":
+        return (
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">{String(p.fileName ?? "File")}</span>
+            {p.size != null ? (
+              <span className="ml-1 text-gray-500">
+                ({(p.size as number) < 1024 ? `${p.size} B` : `${((p.size as number) / 1024).toFixed(1)} KB`})
+              </span>
+            ) : null}
+          </div>
+        );
+      case "file_deleted":
+        return (
+          <p className="text-sm text-gray-700">
+            Deleted: {String(p.fileName ?? "file")}
+          </p>
         );
       case "ai_summary": {
         const bullets = Array.isArray(p.summaryBullets) ? p.summaryBullets : [];
@@ -169,7 +189,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
   );
 }
 
-export function ActivityTimeline({ entityType, entityId }: ActivityTimelineProps) {
+export function ActivityTimeline({ entityType, entityId, refreshTrigger }: ActivityTimelineProps) {
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -196,7 +216,7 @@ export function ActivityTimeline({ entityType, entityId }: ActivityTimelineProps
     } finally {
       setLoading(false);
     }
-  }, [entityType, entityId, page, pageSize, typeFilter]);
+  }, [entityType, entityId, page, pageSize, typeFilter, refreshTrigger]);
 
   useEffect(() => {
     fetchActivities();

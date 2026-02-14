@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@crm/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 import { AiAdapter } from './adapter/ai-adapter.interface';
 import type { GenerateSummaryDto } from './dto/generate-summary.dto';
 
@@ -32,18 +33,25 @@ export class AiService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
+    private readonly attachmentsService: AttachmentsService,
     private readonly aiAdapter: AiAdapter,
   ) {}
 
   async generateSummary(dto: GenerateSummaryDto): Promise<AiSummaryResponse> {
     const { entityType, entityId, days = 30, limit = 50 } = dto;
 
-    const [entityText, activitiesText] = await Promise.all([
+    const [entityText, activitiesText, attachmentText] = await Promise.all([
       this.loadEntitySnapshot(entityType, entityId),
       this.loadActivitiesText(entityType, entityId, days, limit),
+      this.attachmentsService.getExtractedTextForEntity(
+        entityType,
+        entityId,
+        2,
+        8000,
+      ),
     ]);
 
-    const context = `## Entity snapshot\n${entityText}\n\n## Recent activities\n${activitiesText}`;
+    const context = `## Entity snapshot\n${entityText}\n\n## Recent activities\n${activitiesText}${attachmentText}`;
 
     const systemPrompt = `You are a CRM assistant. Given a CRM entity and its recent activities, produce a concise summary.
 
@@ -175,6 +183,8 @@ Keep bullets, risks, and nextActions short and actionable. Include emailDraft on
           const bullets = p.summaryBullets as string[] | undefined;
           parts.push(bullets?.length ? bullets.join('; ') : String(p.text ?? ''));
         }
+        if (type === 'file_uploaded') parts.push(`File: ${p.fileName ?? '—'}`);
+        if (type === 'file_deleted') parts.push(`Deleted: ${p.fileName ?? '—'}`);
         return `[${date}] ${type}: ${parts.join(' ').trim() || JSON.stringify(p)}`;
       })
       .join('\n');

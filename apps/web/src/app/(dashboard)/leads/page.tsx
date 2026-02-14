@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
+import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { leadSchema, type LeadFormData } from "@/lib/validation";
@@ -51,6 +52,7 @@ export default function LeadsPage() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<Lead | null>(null);
+  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(qFilter), 300);
@@ -367,7 +369,16 @@ export default function LeadsPage() {
                 <dd className="text-sm">{viewing.source ?? "—"}</dd>
               </div>
             </dl>
-            <ActivityTimeline entityType="lead" entityId={viewing.id} />
+            <EntityAttachments
+              entityType="lead"
+              entityId={viewing.id}
+              onUploadSuccess={() => setTimelineRefreshKey((k) => k + 1)}
+            />
+            <ActivityTimeline
+              entityType="lead"
+              entityId={viewing.id}
+              refreshTrigger={timelineRefreshKey}
+            />
           </>
         )}
       </Modal>
