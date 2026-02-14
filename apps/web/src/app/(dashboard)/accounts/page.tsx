@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
@@ -24,6 +25,8 @@ interface PaginatedResponse {
 }
 
 export default function AccountsPage() {
+  const searchParams = useSearchParams();
+  const viewId = searchParams.get("viewId");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,13 @@ export default function AccountsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!viewId) return;
+    apiFetch<Account>(`/accounts/${viewId}`)
+      .then((account) => setViewing(account))
+      .catch(() => {});
+  }, [viewId]);
 
   const openCreate = () => {
     setEditingId(null);
