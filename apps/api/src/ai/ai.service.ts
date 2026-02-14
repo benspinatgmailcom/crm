@@ -7,7 +7,7 @@ import {
 import { Prisma } from '@crm/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
-import type { AiAdapter } from './adapter/ai-adapter.interface';
+import { AiAdapter } from './adapter/ai-adapter.interface';
 import type { GenerateSummaryDto } from './dto/generate-summary.dto';
 
 const ENTITY_TYPES = ['account', 'contact', 'lead', 'opportunity'] as const;
