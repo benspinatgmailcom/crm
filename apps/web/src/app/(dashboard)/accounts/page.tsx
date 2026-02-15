@@ -199,7 +199,7 @@ export default function AccountsPage() {
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => router.push(`/accounts/${account.id}`)}
                   >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{account.name}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-accent-1 hover:underline">{account.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{account.industry ?? "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{account.website ?? "—"}</td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>

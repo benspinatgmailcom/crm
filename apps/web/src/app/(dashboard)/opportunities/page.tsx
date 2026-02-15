@@ -286,7 +286,7 @@ export default function OpportunitiesPage() {
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => router.push(`/opportunities/${opp.id}`)}
                   >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{opp.name}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-accent-1 hover:underline">{opp.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{accountName(opp.accountId)}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{formatAmount(opp.amount)}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{opp.stage ?? "—"}</td>

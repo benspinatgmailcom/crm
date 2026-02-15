@@ -15,6 +15,7 @@ import { OpportunityModule } from './opportunity/opportunity.module';
 import { ActivityModule } from './activity/activity.module';
 import { AiModule } from './ai/ai.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { SearchModule } from './search/search.module';
 
 const devOnly = process.env.NODE_ENV !== 'production';
 
@@ -22,6 +23,7 @@ const devOnly = process.env.NODE_ENV !== 'production';
   imports: [
     PrismaModule,
     AuthModule,
+    SearchModule,
     AccountModule,
     ContactModule,
     LeadModule,
