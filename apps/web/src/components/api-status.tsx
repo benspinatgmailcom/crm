@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 const getBaseUrl = () =>
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-export function ApiStatus() {
+export function ApiStatus({ className }: { className?: string }) {
   const [status, setStatus] = useState<"checking" | "ok" | "error">("checking");
 
   const check = () => {
@@ -22,7 +22,7 @@ export function ApiStatus() {
   }, []);
 
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className={`flex items-center gap-2 text-sm ${className ?? ""}`}>
       <span
         className={`inline-block h-2 w-2 rounded-full ${
           status === "ok"
@@ -39,7 +39,7 @@ export function ApiStatus() {
               : "Checking..."
         }
       />
-      <span className="text-gray-500">
+      <span className={className ? "text-inherit" : "text-gray-500"}>
         API {status === "ok" ? "Connected" : status === "error" ? "Disconnected" : "Checking..."}
       </span>
     </div>

@@ -112,7 +112,7 @@ function ActivityItem({
         const actions = (p.actions as Array<{ title: string; type?: string }>) ?? [];
         return (
           <div className="space-y-2">
-            <span className="inline-block rounded bg-indigo-100 px-1.5 py-0.5 text-xs font-medium text-indigo-800">
+            <span className="inline-block rounded bg-accent-2/15 px-1.5 py-0.5 text-xs font-medium text-accent-2">
               AI Recommendation
             </span>
             <ul className="text-sm text-gray-600 list-disc list-inside space-y-0.5">
@@ -139,7 +139,7 @@ function ActivityItem({
                     filename
                   )
                 }
-                className="text-blue-600 hover:underline text-xs"
+                className="text-accent-1 hover:underline text-xs"
               >
                 Download
               </button>

@@ -290,7 +290,7 @@ export function CreateActivityModal({
           <button
             type="submit"
             disabled={submitting || !isValid()}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
           >
             {submitting ? "Creating..." : "Create"}
           </button>

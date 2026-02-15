@@ -221,7 +221,7 @@ export default function OpportunitiesPage() {
         <h1 className="text-2xl font-semibold text-gray-900">Opportunities</h1>
         <button
           onClick={openCreate}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90"
         >
           New
         </button>
@@ -297,7 +297,7 @@ export default function OpportunitiesPage() {
                       <div className="flex justify-end gap-2">
                         <button
                           onClick={() => router.push(`/opportunities/${opp.id}`)}
-                          className="text-sm text-blue-600 hover:underline"
+                          className="text-sm text-accent-1 hover:underline"
                         >
                           View
                         </button>
@@ -306,7 +306,7 @@ export default function OpportunitiesPage() {
                             e.stopPropagation();
                             openEdit(opp);
                           }}
-                          className="text-sm text-blue-600 hover:underline"
+                          className="text-sm text-accent-1 hover:underline"
                         >
                           Edit
                         </button>
@@ -452,7 +452,7 @@ export default function OpportunitiesPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
             >
               {submitting ? "Saving..." : "Save"}
             </button>

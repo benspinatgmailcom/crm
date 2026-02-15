@@ -176,7 +176,7 @@ export default function ContactDetailPage() {
   if (loading && !contact) {
     return (
       <div>
-        <Link href="/contacts" className="text-sm text-blue-600 hover:underline">
+        <Link href="/contacts" className="text-sm text-accent-1 hover:underline">
           ← Back to Contacts
         </Link>
         <p className="mt-4 text-gray-500">Loading...</p>
@@ -187,7 +187,7 @@ export default function ContactDetailPage() {
   if (error || !contact) {
     return (
       <div>
-        <Link href="/contacts" className="text-sm text-blue-600 hover:underline">
+        <Link href="/contacts" className="text-sm text-accent-1 hover:underline">
           ← Back to Contacts
         </Link>
         <p className="mt-4 text-red-600">{error || "Contact not found"}</p>
@@ -200,14 +200,14 @@ export default function ContactDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/contacts" className="text-sm text-blue-600 hover:underline">
+        <Link href="/contacts" className="text-sm text-accent-1 hover:underline">
           ← Back to Contacts
         </Link>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">{displayName}</h1>
             <div className="mt-1 flex flex-wrap gap-3 text-sm text-gray-600">
-              <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline">
+              <a href={`mailto:${contact.email}`} className="text-accent-1 hover:underline">
                 {contact.email}
               </a>
               {contact.phone && <span>{contact.phone}</span>}
@@ -240,7 +240,7 @@ export default function ContactDetailPage() {
               <div>
                 <dt className="text-gray-500">Email</dt>
                 <dd className="text-gray-900">
-                  <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline">
+                  <a href={`mailto:${contact.email}`} className="text-accent-1 hover:underline">
                     {contact.email}
                   </a>
                 </dd>
@@ -253,7 +253,7 @@ export default function ContactDetailPage() {
                 <div>
                   <dt className="text-gray-500">Created from Lead</dt>
                   <dd className="text-gray-900">
-                    <Link href={`/leads/${contact.sourceLeadId}`} className="text-blue-600 hover:underline">
+                    <Link href={`/leads/${contact.sourceLeadId}`} className="text-accent-1 hover:underline">
                       View lead
                     </Link>
                   </dd>
@@ -265,7 +265,7 @@ export default function ContactDetailPage() {
           {account && (
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <h2 className="mb-3 text-sm font-semibold text-gray-900">Related Account</h2>
-              <Link href={`/accounts/${account.id}`} className="text-blue-600 hover:underline">
+              <Link href={`/accounts/${account.id}`} className="text-accent-1 hover:underline">
                 {account.name}
               </Link>
               {account.industry && (
@@ -276,14 +276,14 @@ export default function ContactDetailPage() {
                   href={account.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 block text-sm text-blue-600 hover:underline"
+                  className="mt-1 block text-sm text-accent-1 hover:underline"
                 >
                   {account.website}
                 </a>
               )}
               <Link
                 href={`/accounts/${account.id}`}
-                className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                className="mt-2 inline-block text-sm text-accent-1 hover:underline"
               >
                 View full account →
               </Link>
@@ -296,7 +296,7 @@ export default function ContactDetailPage() {
                 <h2 className="text-sm font-semibold text-gray-900">Related Opportunities</h2>
                 <Link
                   href={`/accounts/${account.id}`}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-accent-1 hover:underline"
                 >
                   View all on account
                 </Link>
@@ -309,7 +309,7 @@ export default function ContactDetailPage() {
                     <div key={o.id} className="flex items-center justify-between px-4 py-3">
                       <Link
                         href={`/opportunities/${o.id}`}
-                        className="text-sm font-medium text-blue-600 hover:underline"
+                        className="text-sm font-medium text-accent-1 hover:underline"
                       >
                         {o.name}
                       </Link>
@@ -410,7 +410,7 @@ export default function ContactDetailPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
             >
               {submitting ? "Saving..." : "Save"}
             </button>

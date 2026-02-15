@@ -165,7 +165,7 @@ export default function LeadDetailPage() {
   if (loading && !lead) {
     return (
       <div>
-        <Link href="/leads" className="text-sm text-blue-600 hover:underline">
+        <Link href="/leads" className="text-sm text-accent-1 hover:underline">
           ← Back to Leads
         </Link>
         <p className="mt-4 text-gray-500">Loading...</p>
@@ -176,7 +176,7 @@ export default function LeadDetailPage() {
   if (error || !lead) {
     return (
       <div>
-        <Link href="/leads" className="text-sm text-blue-600 hover:underline">
+        <Link href="/leads" className="text-sm text-accent-1 hover:underline">
           ← Back to Leads
         </Link>
         <p className="mt-4 text-red-600">{error || "Lead not found"}</p>
@@ -187,7 +187,7 @@ export default function LeadDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/leads" className="text-sm text-blue-600 hover:underline">
+        <Link href="/leads" className="text-sm text-accent-1 hover:underline">
           ← Back to Leads
         </Link>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -206,7 +206,7 @@ export default function LeadDetailPage() {
               )}
             </div>
             <div className="mt-1 flex flex-wrap gap-3 text-sm">
-              <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">
+              <a href={`mailto:${lead.email}`} className="text-accent-1 hover:underline">
                 {lead.email}
               </a>
               {lead.source && <span className="text-gray-500">Source: {lead.source}</span>}
@@ -235,7 +235,7 @@ export default function LeadDetailPage() {
               <div>
                 <dt className="text-gray-500">Email</dt>
                 <dd className="text-gray-900">
-                  <a href={`mailto:${lead.email}`} className="text-blue-600 hover:underline">
+                  <a href={`mailto:${lead.email}`} className="text-accent-1 hover:underline">
                     {lead.email}
                   </a>
                 </dd>
@@ -264,7 +264,7 @@ export default function LeadDetailPage() {
                   {lead.convertedAccountId && (
                     <Link
                       href={`/accounts/${lead.convertedAccountId}`}
-                      className="text-blue-600 hover:underline"
+                      className="text-accent-1 hover:underline"
                     >
                       View Account
                     </Link>
@@ -272,7 +272,7 @@ export default function LeadDetailPage() {
                   {lead.convertedContactId && (
                     <Link
                       href={`/contacts/${lead.convertedContactId}`}
-                      className="text-blue-600 hover:underline"
+                      className="text-accent-1 hover:underline"
                     >
                       View Contact
                     </Link>
@@ -280,7 +280,7 @@ export default function LeadDetailPage() {
                   {lead.convertedOpportunityId && (
                     <Link
                       href={`/opportunities/${lead.convertedOpportunityId}`}
-                      className="text-blue-600 hover:underline"
+                      className="text-accent-1 hover:underline"
                     >
                       View Opportunity
                     </Link>
@@ -291,7 +291,7 @@ export default function LeadDetailPage() {
                   {lead.convertedOpportunityId && (
                     <Link
                       href={`/opportunities/${lead.convertedOpportunityId}`}
-                      className="text-blue-600 hover:underline"
+                      className="text-accent-1 hover:underline"
                     >
                       View on Opportunity timeline
                     </Link>
@@ -306,7 +306,7 @@ export default function LeadDetailPage() {
                 <button
                   type="button"
                   onClick={openConvertModal}
-                  className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  className="rounded-md bg-accent-1 px-3 py-2 text-sm font-medium text-white hover:brightness-90"
                 >
                   Convert to Account & Contact
                 </button>
@@ -368,7 +368,7 @@ export default function LeadDetailPage() {
             <button
               type="submit"
               disabled={converting}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
             >
               {converting ? "Converting…" : "Convert"}
             </button>
@@ -442,7 +442,7 @@ export default function LeadDetailPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
             >
               {submitting ? "Saving..." : "Save"}
             </button>

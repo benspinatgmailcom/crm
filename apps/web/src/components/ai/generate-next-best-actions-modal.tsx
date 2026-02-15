@@ -23,10 +23,10 @@ interface GenerateNextBestActionsModalProps {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  call: "bg-blue-100 text-blue-800",
+  call: "bg-accent-1/15 text-accent-1",
   email: "bg-green-100 text-green-800",
   task: "bg-amber-100 text-amber-800",
-  meeting: "bg-purple-100 text-purple-800",
+  meeting: "bg-accent-2/15 text-accent-2",
   research: "bg-gray-100 text-gray-800",
 };
 

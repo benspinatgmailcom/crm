@@ -109,7 +109,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
           <div className="space-y-1 text-sm">
             <p className="font-medium text-gray-900">{String(p.subject ?? "(No subject)")}</p>
             {p.direction != null && p.direction !== "" ? (
-              <span className={`inline-block rounded px-1.5 py-0.5 text-xs ${String(p.direction) === "inbound" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}`}>
+              <span className={`inline-block rounded px-1.5 py-0.5 text-xs ${String(p.direction) === "inbound" ? "bg-accent-1/15 text-accent-1" : "bg-green-100 text-green-800"}`}>
                 {String(p.direction)}
               </span>
             ) : null}
@@ -153,9 +153,9 @@ function ActivityItem({ activity }: { activity: Activity }) {
         return (
           <div className="space-y-1 text-sm text-gray-700">
             <p>Lead converted to Account, Contact, and Opportunity.</p>
-            {p.accountId && <p><span className="text-gray-500">Account:</span> <a href={`/accounts/${p.accountId}`} className="text-blue-600 hover:underline">View</a></p>}
-            {p.contactId && <p><span className="text-gray-500">Contact:</span> <a href={`/contacts/${p.contactId}`} className="text-blue-600 hover:underline">View</a></p>}
-            {p.opportunityId && <p><span className="text-gray-500">Opportunity:</span> <a href={`/opportunities/${p.opportunityId}`} className="text-blue-600 hover:underline">View</a></p>}
+            {p.accountId ? <p><span className="text-gray-500">Account:</span> <a href={`/accounts/${String(p.accountId)}`} className="text-accent-1 hover:underline">View</a></p> : null}
+            {p.contactId ? <p><span className="text-gray-500">Contact:</span> <a href={`/contacts/${String(p.contactId)}`} className="text-accent-1 hover:underline">View</a></p> : null}
+            {p.opportunityId ? <p><span className="text-gray-500">Opportunity:</span> <a href={`/opportunities/${String(p.opportunityId)}`} className="text-accent-1 hover:underline">View</a></p> : null}
           </div>
         );
       case "ai_recommendation": {
@@ -163,7 +163,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
         const generatedAt = p.generatedAt != null ? String(p.generatedAt) : null;
         return (
           <div className="space-y-2">
-            <span className="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800">
+            <span className="inline-block rounded bg-accent-1/15 px-1.5 py-0.5 text-xs font-medium text-accent-1">
               Next Best Actions
             </span>
             {generatedAt && (
@@ -209,7 +209,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
         const generatedAt = p.generatedAt != null ? String(p.generatedAt) : null;
         return (
           <div className="space-y-2">
-            <span className="inline-block rounded bg-indigo-100 px-1.5 py-0.5 text-xs font-medium text-indigo-800">
+            <span className="inline-block rounded bg-accent-2/15 px-1.5 py-0.5 text-xs font-medium text-accent-2">
               AI Email Draft
             </span>
             {generatedAt && (
@@ -232,7 +232,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
         const hasStructured = bullets.length > 0 || risks.length > 0 || nextActions.length > 0;
         return (
           <div className="space-y-2">
-            <span className="inline-block rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800">
+            <span className="inline-block rounded bg-accent-2/15 px-1.5 py-0.5 text-xs font-medium text-accent-2">
               AI Summary
             </span>
             {scope && <p className="text-xs text-gray-500">{scope}</p>}
@@ -376,7 +376,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
               setTypeFilter(e.target.value);
               setPage(1);
             }}
-            className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1"
           >
             {ACTIVITY_TYPES.map((t) => (
               <option key={t.value || "all"} value={t.value}>
@@ -387,7 +387,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
           <IconButton
             onClick={() => setAiSummaryModalOpen(true)}
             title="Generate AI Summary"
-            className="border-purple-300 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700"
+            className="border-accent-2/50 bg-accent-2/10 text-accent-2 hover:bg-accent-2/20 hover:text-accent-2"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
               <path d="M15.98 1.804a1 1 0 0 0-1.96 0l-.24 1.192a1 1 0 0 1-.784.785l-1.192.238a1 1 0 0 0 0 1.962l1.192.238a1 1 0 0 1 .785.785l.238 1.192a1 1 0 0 0 1.962 0l.238-1.192a1 1 0 0 1 .785-.785l1.192-.238a1 1 0 0 0 0-1.962l-1.192-.238a1 1 0 0 1-.785-.785l-.238-1.192ZM4.949 4.879a1 1 0 0 0-1.898 0l-.308 1.544a1 1 0 0 1-.711.711L.488 7.842a1 1 0 0 0 0 1.898l1.544.308a1 1 0 0 1 .711.711l.308 1.544a1 1 0 0 0 1.898 0l.308-1.544a1 1 0 0 1 .711-.711l1.544-.308a1 1 0 0 0 0-1.898l-1.544-.308a1 1 0 0 1-.711-.711l-.308-1.544ZM12.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
@@ -397,7 +397,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
             <IconButton
               onClick={() => setNextActionsModalOpen(true)}
               title="Next Best Actions"
-              className="border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700"
+              className="border-accent-2/50 bg-accent-2/10 text-accent-2 hover:bg-accent-2/20 hover:text-accent-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path fillRule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75Zm0 10.5a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75ZM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10Z" clipRule="evenodd" />
@@ -408,7 +408,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
             <IconButton
               onClick={() => setDraftEmailModalOpen(true)}
               title="Draft Email"
-              className="border-teal-300 bg-teal-50 text-teal-600 hover:bg-teal-100 hover:text-teal-700"
+              className="border-accent-2/50 bg-accent-2/10 text-accent-2 hover:bg-accent-2/20 hover:text-accent-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path d="M3 4a2 2 0 0 0-2 2v1.161l8.441 4.221a1.25 1.25 0 0 0 1.118 0L19 7.162V6a2 2 0 0 0-2-2H3Z" />
@@ -419,7 +419,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
           <IconButton
             onClick={() => setAddModalOpen(true)}
             title="Add Activity"
-            className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+            className="border-accent-1 bg-accent-1 text-white hover:brightness-90"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
               <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
