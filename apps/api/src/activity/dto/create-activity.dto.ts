@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
 
 export const ACTIVITY_ENTITY_TYPES = ['account', 'contact', 'lead', 'opportunity'] as const;
-export const ACTIVITY_TYPES = ['note', 'call', 'meeting', 'email', 'task', 'ai_summary'] as const;
+export const ACTIVITY_TYPES = ['note', 'call', 'meeting', 'email', 'task', 'ai_summary', 'stage_change'] as const;
 
 export class CreateActivityDto {
   @ApiProperty({ description: 'Entity type (account, contact, lead, opportunity)', enum: ACTIVITY_ENTITY_TYPES })

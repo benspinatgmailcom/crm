@@ -125,8 +125,8 @@ export class OpportunityService {
       where: { id },
       data: {
         ...dto,
-        amount: dto.amount != null ? dto.amount : undefined,
-        closeDate: dto.closeDate ? new Date(dto.closeDate) : undefined,
+        amount: dto.amount !== undefined ? dto.amount : undefined,
+        closeDate: dto.closeDate !== undefined ? (dto.closeDate ? new Date(dto.closeDate) : null) : undefined,
       },
     });
   }

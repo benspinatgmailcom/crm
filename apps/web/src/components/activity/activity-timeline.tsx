@@ -28,6 +28,7 @@ export const ACTIVITY_TYPES = [
   { value: "ai_summary", label: "AI Summary" },
   { value: "ai_recommendation", label: "AI Recommendations" },
   { value: "ai_email_draft", label: "AI Email Draft" },
+  { value: "stage_change", label: "Stage Change" },
 ] as const;
 
 interface Activity {
@@ -221,6 +222,29 @@ function ActivityItem({ activity }: { activity: Activity }) {
             )}
             <p className="text-sm font-medium text-gray-900">{subject}</p>
             <p className="text-sm text-gray-700 line-clamp-3 whitespace-pre-wrap">{body || "(No body)"}</p>
+          </div>
+        );
+      }
+      case "stage_change": {
+        const fromStage = String(p.fromStage ?? "—");
+        const toStage = String(p.toStage ?? "—");
+        const reason = p.reason ? String(p.reason) : null;
+        const competitor = p.competitor ? String(p.competitor) : null;
+        const notes = p.notes ? String(p.notes) : null;
+        return (
+          <div className="space-y-1 text-sm text-gray-700">
+            <p>
+              Moved from <span className="font-medium">{fromStage}</span> →{" "}
+              <span className="font-medium">{toStage}</span>
+            </p>
+            {(reason || competitor) && (
+              <p className="text-xs text-gray-600">
+                {reason}
+                {reason && competitor ? " · " : ""}
+                {competitor ? `Competitor: ${competitor}` : ""}
+              </p>
+            )}
+            {notes && <p className="line-clamp-2">{notes}</p>}
           </div>
         );
       }

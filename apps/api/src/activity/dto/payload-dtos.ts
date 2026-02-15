@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsIn, IsISO8601, MinLength, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsIn, IsISO8601, MinLength, IsObject, IsNumber } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class NotePayloadDto {
@@ -79,6 +79,36 @@ export class TaskPayloadDto {
   status?: 'open' | 'done';
 }
 
+export class StageChangePayloadDto {
+  @IsOptional()
+  @IsString()
+  fromStage?: string;
+
+  @IsOptional()
+  @IsString()
+  toStage?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  competitor?: string;
+
+  @IsOptional()
+  @IsString()
+  nextSteps?: string;
+
+  @IsOptional()
+  @IsNumber()
+  finalAmount?: number;
+}
+
 export class AiSummaryPayloadDto {
   @ApiProperty({ description: 'AI summary text' })
   @IsString()
@@ -93,7 +123,7 @@ export class AiSummaryPayloadDto {
 
 export const PAYLOAD_DTO_MAP: Record<
   string,
-  new (...args: unknown[]) => NotePayloadDto | CallPayloadDto | MeetingPayloadDto | EmailPayloadDto | TaskPayloadDto | AiSummaryPayloadDto
+  new (...args: unknown[]) => NotePayloadDto | CallPayloadDto | MeetingPayloadDto | EmailPayloadDto | TaskPayloadDto | StageChangePayloadDto | AiSummaryPayloadDto
 > = {
   note: NotePayloadDto,
   call: CallPayloadDto,
@@ -101,4 +131,5 @@ export const PAYLOAD_DTO_MAP: Record<
   email: EmailPayloadDto,
   task: TaskPayloadDto,
   ai_summary: AiSummaryPayloadDto,
+  stage_change: StageChangePayloadDto,
 };

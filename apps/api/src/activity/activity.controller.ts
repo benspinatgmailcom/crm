@@ -20,7 +20,7 @@ export class ActivityController {
   @ApiOperation({
     summary: 'Create activity',
     description:
-      'Creates an activity for an entity. Payload schema depends on type: note {text}, call/meeting {summary?, outcome?, nextStep?}, email {subject?, body?, direction?}, task {title, dueAt?, status?}, ai_summary {text, sources?}.',
+      'Creates an activity for an entity. Payload schema depends on type: note {text}, call/meeting {summary?, outcome?, nextStep?}, email {subject?, body?, direction?}, task {title, dueAt?, status?}, ai_summary {text, sources?}, stage_change {fromStage?, toStage?, reason?, notes?, competitor?, nextSteps?, finalAmount?}.',
   })
   @ApiResponse({ status: 201, description: 'Activity created' })
   @ApiResponse({ status: 400, description: 'Validation error (entityType, entityId, type, or payload)' })
