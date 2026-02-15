@@ -19,6 +19,7 @@ export const ACTIVITY_TYPES = [
   { value: "task", label: "Task" },
   { value: "file_uploaded", label: "File Uploaded" },
   { value: "ai_summary", label: "AI Summary" },
+  { value: "ai_recommendation", label: "AI Recommendations" },
 ] as const;
 
 interface Activity {
@@ -124,6 +125,51 @@ function ActivityItem({ activity }: { activity: Activity }) {
             {p.opportunityId && <p><span className="text-gray-500">Opportunity:</span> <a href={`/opportunities/${p.opportunityId}`} className="text-blue-600 hover:underline">View</a></p>}
           </div>
         );
+      case "ai_recommendation": {
+        const actions = Array.isArray(p.actions) ? p.actions : [];
+        const generatedAt = p.generatedAt != null ? String(p.generatedAt) : null;
+        return (
+          <div className="space-y-2">
+            <span className="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800">
+              Next Best Actions
+            </span>
+            {generatedAt && (
+              <p className="text-xs text-gray-500">
+                Generated {new Date(generatedAt).toLocaleDateString()} at {new Date(generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            )}
+            {actions.length === 0 ? (
+              <p className="text-sm text-gray-500">No recommendations</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {actions.map((a, i) => {
+                  const action = a as Record<string, unknown>;
+                  const title = typeof action.title === "string" ? action.title : `Action ${i + 1}`;
+                  const why = typeof action.why === "string" ? action.why : null;
+                  const actionType = typeof action.type === "string" ? String(action.type) : "task";
+                  const suggestedDueAt = action.suggestedDueAt != null ? String(action.suggestedDueAt) : null;
+                  return (
+                    <li key={i} className="rounded border border-gray-100 bg-gray-50 p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-gray-900">{title}</span>
+                        <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700">
+                          {actionType}
+                        </span>
+                        {suggestedDueAt && (
+                          <span className="text-xs text-gray-500">
+                            Due: {new Date(suggestedDueAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      {why && <p className="mt-1 text-gray-600">{why}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        );
+      }
       case "ai_summary": {
         const bullets = Array.isArray(p.summaryBullets) ? p.summaryBullets : [];
         const risks = Array.isArray(p.risks) ? p.risks : [];
