@@ -22,16 +22,31 @@ export function getRefreshToken(): string | null {
   return localStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
+export interface StoredUser {
+  id: string;
+  email: string;
+  role: string;
+  mustChangePassword?: boolean;
+}
+
 export function setTokens(
   accessToken: string,
   refreshToken: string,
-  user: { id: string; email: string; role: string }
+  user: StoredUser
 ): void {
   if (typeof window === "undefined") return;
   accessTokenMemory = accessToken;
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function updateStoredUser(updates: Partial<StoredUser>): void {
+  if (typeof window === "undefined") return;
+  const current = getStoredUser();
+  if (!current) return;
+  const updated = { ...current, ...updates };
+  localStorage.setItem(USER_KEY, JSON.stringify(updated));
 }
 
 export function clearTokens(): void {
@@ -42,12 +57,12 @@ export function clearTokens(): void {
   localStorage.removeItem(USER_KEY);
 }
 
-export function getStoredUser(): { id: string; email: string; role: string } | null {
+export function getStoredUser(): StoredUser | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as { id: string; email: string; role: string };
+    return JSON.parse(raw) as StoredUser;
   } catch {
     return null;
   }

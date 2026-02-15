@@ -19,6 +19,7 @@ const navItems = [
   { href: "/contacts", label: "Contacts" },
   { href: "/leads", label: "Leads" },
   { href: "/opportunities", label: "Opportunities" },
+  { href: "/settings/users", label: "Settings", adminOnly: true },
 ];
 
 const isDev = typeof window !== "undefined" && process.env.NODE_ENV !== "production";
@@ -36,8 +37,12 @@ export default function DashboardLayout({
     if (isLoading) return;
     if (!isAuthenticated) {
       router.replace("/login");
+      return;
     }
-  }, [isAuthenticated, isLoading, router]);
+    if (user?.mustChangePassword) {
+      router.replace("/change-password");
+    }
+  }, [isAuthenticated, isLoading, user?.mustChangePassword, router]);
 
   if (isLoading) {
     return (
@@ -74,7 +79,9 @@ export default function DashboardLayout({
           </div>
           <nav className="flex flex-1 flex-col gap-0.5 px-4 py-3">
             {navItems.map((item) => {
-              const isActive = pathname === item.href;
+              const adminOnly = "adminOnly" in item && item.adminOnly;
+              if (adminOnly && !isAdmin(user?.role)) return null;
+              const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
               return (
                 <Link
                   key={item.href}
