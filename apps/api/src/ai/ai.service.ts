@@ -8,8 +8,16 @@ import { Activity } from '@crm/db';
 import { ActivityService } from '../activity/activity.service';
 import { AiAdapter } from './adapter/ai-adapter.interface';
 import { AiContextService } from './ai-context.service';
+import type { DraftEmailDto } from './dto/draft-email.dto';
 import type { GenerateSummaryDto } from './dto/summary.dto';
 import type { NextActionsDto } from './dto/next-actions.dto';
+
+export interface DraftEmailResult {
+  activityId: string;
+  subject: string;
+  body: string;
+  suggestedRecipients?: { name?: string; email: string }[];
+}
 
 export interface AiSummaryPayload {
   text: string;
@@ -143,6 +151,148 @@ Return up to ${count} actions, ordered by priority (1 first).`;
     });
 
     return { activityId: activity.id, actions: parsed.actions };
+  }
+
+  async generateDraftEmail(dto: DraftEmailDto): Promise<DraftEmailResult> {
+    const {
+      entityType,
+      entityId,
+      recipientEmail,
+      intent = 'follow_up',
+      tone = 'professional',
+      length = 'medium',
+      additionalContext,
+    } = dto;
+
+    const context = await this.contextService.buildEmailContextPack(
+      entityType,
+      entityId,
+      recipientEmail,
+      additionalContext,
+    );
+
+    const systemPrompt = `You are a CRM assistant. Draft an email based on the entity data, recent activities, and context below.
+
+Respond with STRICT JSON only. Schema:
+{
+  "subject": "email subject line",
+  "body": "email body (plain text, use \\n for line breaks)",
+  "suggestedRecipients": [{"name": "optional", "email": "required"}],
+  "followUpTasks": [{"title": "string", "dueAt": "ISO date optional"}]
+}
+
+Intent: ${intent}. Tone: ${tone}. Length: ${length}.
+All fields except subject and body are optional. Keep the email concise and professional.`;
+
+    let raw: string;
+    try {
+      raw = await this.aiAdapter.chat([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: context },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'AI request failed';
+      throw new ServiceUnavailableException(`Draft email failed: ${msg}`);
+    }
+
+    let parsed = this.parseDraftEmailResponse(raw);
+    if (!parsed) {
+      try {
+        raw = await this.aiAdapter.chat([
+          { role: 'system', content: 'Respond with valid JSON only.' },
+          { role: 'user', content: `Fix this to valid JSON: ${raw}` },
+        ]);
+        parsed = this.parseDraftEmailResponse(raw);
+      } catch {
+        throw new BadRequestException('AI returned invalid JSON for draft email');
+      }
+    }
+    if (!parsed) throw new BadRequestException('AI returned invalid JSON for draft email');
+
+    const activity = await this.activityService.createRaw({
+      entityType,
+      entityId,
+      type: 'ai_email_draft',
+      payload: {
+        subject: parsed.subject,
+        body: parsed.body,
+        intent,
+        tone,
+        length,
+        recipientEmail: recipientEmail ?? undefined,
+        suggestedRecipients: parsed.suggestedRecipients,
+        generatedAt: new Date().toISOString(),
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      },
+    });
+
+    return {
+      activityId: activity.id,
+      subject: parsed.subject,
+      body: parsed.body,
+      suggestedRecipients: parsed.suggestedRecipients,
+    };
+  }
+
+  async logDraftEmailAsOutbound(
+    activityId: string,
+    toEmail?: string,
+  ): Promise<Activity> {
+    const draft = await this.activityService.findOne(activityId);
+    if (draft.type !== 'ai_email_draft') {
+      throw new BadRequestException('Activity is not an AI email draft');
+    }
+    const p = (draft.payload as Record<string, unknown>) ?? {};
+    const subject = typeof p.subject === 'string' ? p.subject : '(No subject)';
+    const body = typeof p.body === 'string' ? p.body : '';
+    let recipient = toEmail ?? (typeof p.recipientEmail === 'string' ? p.recipientEmail : null);
+    if (!recipient && Array.isArray(p.suggestedRecipients) && p.suggestedRecipients.length > 0) {
+      const first = p.suggestedRecipients[0] as Record<string, unknown>;
+      recipient = typeof first.email === 'string' ? first.email : null;
+    }
+    if (!recipient) recipient = '(recipient not specified)';
+
+    return this.activityService.createRaw({
+      entityType: draft.entityType,
+      entityId: draft.entityId,
+      type: 'email',
+      payload: {
+        direction: 'outbound',
+        subject,
+        body,
+        to: recipient,
+        source: { aiDraftActivityId: activityId },
+      },
+    });
+  }
+
+  private parseDraftEmailResponse(
+    raw: string,
+  ): {
+    subject: string;
+    body: string;
+    suggestedRecipients?: { name?: string; email: string }[];
+  } | null {
+    const jsonStr = this.extractJson(raw);
+    try {
+      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+      const subject = typeof parsed.subject === 'string' ? parsed.subject : '';
+      const body = typeof parsed.body === 'string' ? parsed.body : '';
+      if (!subject && !body) return null;
+      let suggestedRecipients: { name?: string; email: string }[] | undefined;
+      if (Array.isArray(parsed.suggestedRecipients)) {
+        suggestedRecipients = parsed.suggestedRecipients
+          .filter((r): r is Record<string, unknown> => r != null && typeof r === 'object')
+          .map((r) => ({
+            name: typeof r.name === 'string' ? r.name : undefined,
+            email: typeof r.email === 'string' ? r.email : '',
+          }))
+          .filter((r) => r.email);
+      }
+      return { subject, body, suggestedRecipients };
+    } catch {
+      return null;
+    }
   }
 
   async convertToTask(activityId: string, actionIndex: number): Promise<Activity> {

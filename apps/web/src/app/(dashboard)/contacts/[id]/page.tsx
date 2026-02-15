@@ -334,6 +334,7 @@ export default function ContactDetailPage() {
             entityType="contact"
             entityId={contact.id}
             refreshTrigger={timelineRefreshKey}
+            draftEmailConfig={{ defaultRecipientEmail: contact.email }}
           />
         </div>
       </div>
