@@ -115,6 +115,15 @@ function ActivityItem({ activity }: { activity: Activity }) {
             Deleted: {String(p.fileName ?? "file")}
           </p>
         );
+      case "lead_converted":
+        return (
+          <div className="space-y-1 text-sm text-gray-700">
+            <p>Lead converted to Account, Contact, and Opportunity.</p>
+            {p.accountId && <p><span className="text-gray-500">Account:</span> <a href={`/accounts/${p.accountId}`} className="text-blue-600 hover:underline">View</a></p>}
+            {p.contactId && <p><span className="text-gray-500">Contact:</span> <a href={`/contacts/${p.contactId}`} className="text-blue-600 hover:underline">View</a></p>}
+            {p.opportunityId && <p><span className="text-gray-500">Opportunity:</span> <a href={`/opportunities/${p.opportunityId}`} className="text-blue-600 hover:underline">View</a></p>}
+          </div>
+        );
       case "ai_summary": {
         const bullets = Array.isArray(p.summaryBullets) ? p.summaryBullets : [];
         const risks = Array.isArray(p.risks) ? p.risks : [];

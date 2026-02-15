@@ -5,6 +5,7 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { LeadService } from './lead.service';
+import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { QueryLeadDto } from './dto/query-lead.dto';
 import { UpdateLeadDto } from './dto/update-lead.dto';
@@ -34,6 +35,16 @@ export class LeadController {
   @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
   findAll(@Query() query: QueryLeadDto): Promise<PaginatedResult<Lead>> {
     return this.leadService.findAll(query);
+  }
+
+  @Post(':id/convert')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Convert lead to Account, Contact, and Opportunity' })
+  @ApiResponse({ status: 201, description: 'Lead converted successfully' })
+  @ApiResponse({ status: 400, description: 'Lead already converted' })
+  @ApiResponse({ status: 404, description: 'Lead not found' })
+  convert(@Param('id') id: string, @Body() dto?: ConvertLeadDto) {
+    return this.leadService.convert(id, dto);
   }
 
   @Get(':id')

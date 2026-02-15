@@ -16,6 +16,7 @@ interface Contact {
   lastName: string;
   email: string;
   phone: string | null;
+  sourceLeadId?: string | null;
 }
 
 interface Account {
@@ -248,6 +249,16 @@ export default function ContactDetailPage() {
                 <dt className="text-gray-500">Phone</dt>
                 <dd className="text-gray-900">{contact.phone ?? "—"}</dd>
               </div>
+              {contact.sourceLeadId && (
+                <div>
+                  <dt className="text-gray-500">Created from Lead</dt>
+                  <dd className="text-gray-900">
+                    <Link href={`/leads/${contact.sourceLeadId}`} className="text-blue-600 hover:underline">
+                      View lead
+                    </Link>
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
 

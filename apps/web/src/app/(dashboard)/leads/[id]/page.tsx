@@ -16,6 +16,18 @@ interface Lead {
   company: string | null;
   status: string | null;
   source: string | null;
+  convertedAccountId?: string | null;
+  convertedContactId?: string | null;
+  convertedOpportunityId?: string | null;
+  convertedAt?: string | null;
+}
+
+interface ConvertLeadResult {
+  leadId: string;
+  accountId: string;
+  contactId: string;
+  opportunityId: string;
+  initialTaskActivityId: string;
 }
 
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified"];
@@ -30,6 +42,11 @@ export default function LeadDetailPage() {
   const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [convertAccountName, setConvertAccountName] = useState("");
+  const [convertOpportunityName, setConvertOpportunityName] = useState("");
+  const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
   const [formData, setFormData] = useState<LeadFormData>({
     name: "",
     email: "",
@@ -60,6 +77,39 @@ export default function LeadDetailPage() {
   useEffect(() => {
     fetchLead();
   }, [fetchLead]);
+
+  const openConvertModal = () => {
+    setConvertAccountName(lead?.company || lead?.name || "");
+    setConvertOpportunityName(
+      lead?.company ? `${lead.company} - New opportunity` : `Opportunity from ${lead?.name || ""}`
+    );
+    setConvertError(null);
+    setConvertModalOpen(true);
+  };
+
+  const handleConvert = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead) return;
+    setConverting(true);
+    setConvertError(null);
+    try {
+      const body: { accountName?: string; opportunityName?: string } = {};
+      if (convertAccountName.trim()) body.accountName = convertAccountName.trim();
+      if (convertOpportunityName.trim()) body.opportunityName = convertOpportunityName.trim();
+      await apiFetch<ConvertLeadResult>(`/leads/${lead.id}/convert`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      setConvertModalOpen(false);
+      fetchLead();
+      setTimelineRefreshKey((k) => k + 1);
+    } catch (err: unknown) {
+      const e = err as { body?: { message?: string }; message?: string };
+      setConvertError(e.body?.message || e.message || "Conversion failed");
+    } finally {
+      setConverting(false);
+    }
+  };
 
   const openEdit = () => {
     if (!lead) return;
@@ -145,10 +195,14 @@ export default function LeadDetailPage() {
             <h1 className="text-2xl font-semibold text-gray-900">{lead.name}</h1>
             <div className="mt-1 flex flex-wrap gap-3 text-sm text-gray-600">
               {lead.company && <span>{lead.company}</span>}
-              {lead.status && (
-                <span className="rounded bg-gray-100 px-2 py-0.5 font-medium text-gray-700">
-                  {lead.status}
-                </span>
+              {lead.status === "converted" ? (
+                <span className="rounded bg-green-100 px-2 py-0.5 font-medium text-green-800">Converted</span>
+              ) : (
+                lead.status && (
+                  <span className="rounded bg-gray-100 px-2 py-0.5 font-medium text-gray-700">
+                    {lead.status}
+                  </span>
+                )
               )}
             </div>
             <div className="mt-1 flex flex-wrap gap-3 text-sm">
@@ -203,14 +257,61 @@ export default function LeadDetailPage() {
 
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">Convert Lead</h2>
-            <p className="mb-3 text-sm text-gray-500">Lead conversion coming soon.</p>
-            <button
-              type="button"
-              disabled
-              className="rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-400 cursor-not-allowed"
-            >
-              Convert to Account & Contact
-            </button>
+            {lead.convertedAt ? (
+              <div className="space-y-3 text-sm">
+                <p className="text-gray-700">This lead has been converted.</p>
+                <div className="flex flex-wrap gap-2">
+                  {lead.convertedAccountId && (
+                    <Link
+                      href={`/accounts/${lead.convertedAccountId}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      View Account
+                    </Link>
+                  )}
+                  {lead.convertedContactId && (
+                    <Link
+                      href={`/contacts/${lead.convertedContactId}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      View Contact
+                    </Link>
+                  )}
+                  {lead.convertedOpportunityId && (
+                    <Link
+                      href={`/opportunities/${lead.convertedOpportunityId}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      View Opportunity
+                    </Link>
+                  )}
+                </div>
+                <p className="text-gray-600">
+                  Initial task created: <strong>Schedule discovery call</strong> —{" "}
+                  {lead.convertedOpportunityId && (
+                    <Link
+                      href={`/opportunities/${lead.convertedOpportunityId}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      View on Opportunity timeline
+                    </Link>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="mb-3 text-sm text-gray-500">
+                  Convert this lead to an Account, Contact, and Opportunity.
+                </p>
+                <button
+                  type="button"
+                  onClick={openConvertModal}
+                  className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Convert to Account & Contact
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -227,6 +328,52 @@ export default function LeadDetailPage() {
           />
         </div>
       </div>
+
+      <Modal isOpen={convertModalOpen} onClose={() => setConvertModalOpen(false)} title="Convert Lead">
+        <form onSubmit={handleConvert} className="space-y-4">
+          {convertError && <p className="text-sm text-red-600">{convertError}</p>}
+          <p className="text-sm text-gray-600">
+            Create an Account, Contact, and Opportunity from this lead. An initial task &quot;Schedule
+            discovery call&quot; will be added to the Opportunity timeline.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Account name</label>
+            <input
+              value={convertAccountName}
+              onChange={(e) => setConvertAccountName(e.target.value)}
+              placeholder={lead?.company || lead?.name || ""}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Opportunity name</label>
+            <input
+              value={convertOpportunityName}
+              onChange={(e) => setConvertOpportunityName(e.target.value)}
+              placeholder={
+                lead?.company ? `${lead.company} - New opportunity` : `Opportunity from ${lead?.name || ""}`
+              }
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setConvertModalOpen(false)}
+              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={converting}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {converting ? "Converting…" : "Convert"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Lead">
         <form onSubmit={handleSubmit} className="space-y-4">

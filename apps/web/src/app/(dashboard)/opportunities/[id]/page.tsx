@@ -17,6 +17,7 @@ interface Opportunity {
   stage: string | null;
   probability: number | null;
   closeDate: string | null;
+  sourceLeadId?: string | null;
 }
 
 interface Account {
@@ -256,6 +257,16 @@ export default function OpportunityDetailPage() {
                   {opportunity.closeDate ? new Date(opportunity.closeDate).toLocaleDateString() : "—"}
                 </dd>
               </div>
+              {opportunity.sourceLeadId && (
+                <div>
+                  <dt className="text-gray-500">Created from Lead</dt>
+                  <dd className="text-gray-900">
+                    <Link href={`/leads/${opportunity.sourceLeadId}`} className="text-blue-600 hover:underline">
+                      View lead
+                    </Link>
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
 

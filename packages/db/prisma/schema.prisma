@@ -11,53 +11,73 @@ datasource db {
 }
 
 model Account {
-  id        String   @id @default(cuid())
-  name      String
-  industry  String?
-  website   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(cuid())
+  name         String
+  industry     String?
+  website      String?
+  sourceLeadId String?  @unique
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
+  sourceLead   Lead?     @relation("AccountSourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
   contacts     Contact[]
   opportunities Opportunity[]
+
+  @@index([sourceLeadId])
 }
 
 model Contact {
-  id        String   @id @default(cuid())
-  accountId String
-  firstName String
-  lastName  String
-  email     String
-  phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  accountId    String
+  firstName    String
+  lastName     String
+  email        String
+  phone        String?
+  sourceLeadId String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account    Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceLead Lead?   @relation("ContactSourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
+
+  @@index([sourceLeadId])
 }
 
 model Lead {
-  id        String   @id @default(cuid())
-  name      String
-  email     String
-  company   String?
-  status    String?  @default("new")
-  source    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String
+  company              String?
+  status               String?   @default("new")
+  source               String?
+  convertedAccountId   String?
+  convertedContactId   String?
+  convertedOpportunityId String?
+  convertedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  convertedAccount     Account?     @relation("AccountSourceLead")
+  convertedContact     Contact?     @relation("ContactSourceLead")
+  convertedOpportunity Opportunity? @relation("OpportunitySourceLead")
 }
 
 model Opportunity {
-  id         String    @id @default(cuid())
-  accountId  String
-  name       String
-  amount     Decimal?  @db.Decimal(14, 2)
-  stage      String?   @default("prospecting")
-  probability Int?
-  closeDate  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  accountId     String
+  name          String
+  amount        Decimal?  @db.Decimal(14, 2)
+  stage         String?   @default("prospecting")
+  probability   Int?
+  closeDate     DateTime?
+  sourceLeadId  String?  @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account    Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceLead Lead?   @relation("OpportunitySourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
+
+  @@index([sourceLeadId])
 }
 
 model Activity {
