@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
-import { ActivityTimeline } from "@/components/activity/activity-timeline";
-import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { contactSchema, type ContactFormData } from "@/lib/validation";
@@ -31,6 +30,9 @@ interface PaginatedResponse {
 }
 
 export default function ContactsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const viewId = searchParams.get("viewId");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,8 +60,10 @@ export default function ContactsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<Contact | null>(null);
-  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (viewId) router.replace(`/contacts/${viewId}`);
+  }, [viewId, router]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
@@ -257,28 +261,38 @@ export default function ContactsPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {(data?.data ?? []).map((contact) => (
-                  <tr key={contact.id}>
+                  <tr
+                    key={contact.id}
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => router.push(`/contacts/${contact.id}`)}
+                  >
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       {contact.firstName} {contact.lastName}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">{contact.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{accountName(contact.accountId)}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => setViewing(contact)}
+                          onClick={() => router.push(`/contacts/${contact.id}`)}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           View
                         </button>
                         <button
-                          onClick={() => openEdit(contact)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(contact);
+                          }}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => setDeleteId(contact.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteId(contact.id);
+                          }}
                           className="text-sm text-red-600 hover:underline"
                         >
                           Delete
@@ -393,43 +407,6 @@ export default function ContactsPage() {
             </button>
           </div>
         </form>
-      </Modal>
-
-      <Modal isOpen={!!viewing} onClose={() => setViewing(null)} title="Contact Details">
-        {viewing && (
-          <>
-            <dl className="space-y-2">
-              <div>
-                <dt className="text-sm text-gray-500">Name</dt>
-                <dd className="text-sm font-medium">
-                  {viewing.firstName} {viewing.lastName}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Email</dt>
-                <dd className="text-sm">{viewing.email}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Account</dt>
-                <dd className="text-sm">{accountName(viewing.accountId)}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Phone</dt>
-                <dd className="text-sm">{viewing.phone ?? "—"}</dd>
-              </div>
-            </dl>
-            <EntityAttachments
-              entityType="contact"
-              entityId={viewing.id}
-              onUploadSuccess={() => setTimelineRefreshKey((k) => k + 1)}
-            />
-            <ActivityTimeline
-              entityType="contact"
-              entityId={viewing.id}
-              refreshTrigger={timelineRefreshKey}
-            />
-          </>
-        )}
       </Modal>
 
       <ConfirmDialog
