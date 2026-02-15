@@ -8,7 +8,17 @@ import { Activity } from '@crm/db';
 import { ActivityService } from '../activity/activity.service';
 import { AiAdapter } from './adapter/ai-adapter.interface';
 import { AiContextService } from './ai-context.service';
+import type { GenerateSummaryDto } from './dto/summary.dto';
 import type { NextActionsDto } from './dto/next-actions.dto';
+
+export interface AiSummaryPayload {
+  text: string;
+  scope?: string;
+  summaryBullets?: string[];
+  risks?: string[];
+  nextActions?: string[];
+  emailDraft?: { subject?: string; body?: string };
+}
 
 export interface NextAction {
   priority: number;
@@ -33,6 +43,53 @@ export class AiService {
     private readonly activityService: ActivityService,
     private readonly aiAdapter: AiAdapter,
   ) {}
+
+  async generateSummary(dto: GenerateSummaryDto): Promise<Activity> {
+    const { entityType, entityId, days = 30 } = dto;
+    const context = await this.contextService.buildContextPack(
+      entityType,
+      entityId,
+      days,
+      50,
+    );
+
+    const systemPrompt = `You are a CRM assistant. Given entity data and recent activities, generate a concise AI summary.
+
+Respond with STRICT JSON only. Schema:
+{
+  "text": "2-3 sentence executive summary",
+  "scope": "e.g. Last 30 days",
+  "summaryBullets": ["key point 1", "key point 2", "key point 3"],
+  "risks": ["any risks or concerns"],
+  "nextActions": ["recommended next action 1", "recommended next action 2"],
+  "emailDraft": { "subject": "optional suggested email subject", "body": "optional brief body" }
+}
+
+All fields except "text" are optional. Keep it concise and actionable.`;
+
+    let raw: string;
+    try {
+      raw = await this.aiAdapter.chat([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: context },
+      ]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'AI request failed';
+      throw new ServiceUnavailableException(`AI summary failed: ${msg}`);
+    }
+
+    const payload = this.parseSummaryResponse(raw, days);
+    return this.activityService.createRaw({
+      entityType,
+      entityId,
+      type: 'ai_summary',
+      payload: {
+        ...payload,
+        scope: payload.scope ?? `Last ${days} days`,
+        generatedAt: new Date().toISOString(),
+      },
+    });
+  }
 
   async generateNextActions(dto: NextActionsDto): Promise<NextActionsResponse> {
     const { entityType, entityId, count = 5 } = dto;
@@ -159,5 +216,41 @@ Return up to ${count} actions, ordered by priority (1 first).`;
       });
     }
     return { actions };
+  }
+
+  private parseSummaryResponse(raw: string, days: number): AiSummaryPayload {
+    const jsonStr = this.extractJson(raw);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      throw new BadRequestException('AI returned invalid JSON for summary');
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      throw new BadRequestException('AI summary response must be an object');
+    }
+    const o = parsed as Record<string, unknown>;
+    return {
+      text: typeof o.text === 'string' ? o.text : 'Summary generated.',
+      scope: typeof o.scope === 'string' ? o.scope : `Last ${days} days`,
+      summaryBullets: Array.isArray(o.summaryBullets)
+        ? o.summaryBullets.filter((b): b is string => typeof b === 'string')
+        : undefined,
+      risks: Array.isArray(o.risks) ? o.risks.filter((r): r is string => typeof r === 'string') : undefined,
+      nextActions: Array.isArray(o.nextActions)
+        ? o.nextActions.filter((a): a is string => typeof a === 'string')
+        : undefined,
+      emailDraft:
+        o.emailDraft && typeof o.emailDraft === 'object'
+          ? {
+              subject: typeof (o.emailDraft as Record<string, unknown>).subject === 'string'
+                ? (o.emailDraft as Record<string, unknown>).subject as string
+                : undefined,
+              body: typeof (o.emailDraft as Record<string, unknown>).body === 'string'
+                ? (o.emailDraft as Record<string, unknown>).body as string
+                : undefined,
+            }
+          : undefined,
+    };
   }
 }

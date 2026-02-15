@@ -6,12 +6,24 @@ import { Role } from '../auth/constants';
 import { AiService, type NextActionsResponse } from './ai.service';
 import { ConvertActionDto } from './dto/next-actions.dto';
 import { NextActionsDto } from './dto/next-actions.dto';
+import { GenerateSummaryDto } from './dto/summary.dto';
 
 @ApiTags('AI')
 @Controller('ai')
 @ApiBearerAuth()
 export class AiController {
   constructor(private readonly aiService: AiService) {}
+
+  @Post('summary')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Generate AI summary for an entity' })
+  @ApiResponse({ status: 201, description: 'AI summary activity created' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 404, description: 'Entity not found' })
+  @ApiResponse({ status: 503, description: 'AI service unavailable' })
+  generateSummary(@Body() dto: GenerateSummaryDto): Promise<Activity> {
+    return this.aiService.generateSummary(dto);
+  }
 
   @Post('next-actions')
   @Roles(Role.ADMIN, Role.USER)
