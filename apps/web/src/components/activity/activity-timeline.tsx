@@ -6,9 +6,15 @@ import { Pagination } from "@/components/ui/pagination";
 import { useAuth } from "@/context/auth-context";
 import { AddActivityModal } from "./add-activity-modal";
 import { GenerateAiSummaryModal } from "./generate-ai-summary-modal";
+import { DraftEmailModal } from "@/components/ai/draft-email-modal";
 import { GenerateNextBestActionsModal } from "@/components/ai/generate-next-best-actions-modal";
 
 export type ActivityEntityType = "account" | "contact" | "lead" | "opportunity";
+
+export interface DraftEmailConfig {
+  defaultRecipientEmail?: string;
+  suggestedRecipients?: { name?: string; email: string }[];
+}
 
 export const ACTIVITY_TYPES = [
   { value: "", label: "All" },
@@ -20,6 +26,7 @@ export const ACTIVITY_TYPES = [
   { value: "file_uploaded", label: "File Uploaded" },
   { value: "ai_summary", label: "AI Summary" },
   { value: "ai_recommendation", label: "AI Recommendations" },
+  { value: "ai_email_draft", label: "AI Email Draft" },
 ] as const;
 
 interface Activity {
@@ -44,6 +51,32 @@ interface ActivityTimelineProps {
   entityId: string;
   /** Change to trigger a refresh (e.g. after attachment upload) */
   refreshTrigger?: number;
+  /** Optional config to show Draft Email button (for opportunity, contact, lead) */
+  draftEmailConfig?: DraftEmailConfig;
+}
+
+function IconButton({
+  onClick,
+  title,
+  children,
+  className = "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900",
+}: {
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors ${className}`}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
 }
 
 function formatDate(s: string) {
@@ -170,6 +203,26 @@ function ActivityItem({ activity }: { activity: Activity }) {
           </div>
         );
       }
+      case "ai_email_draft": {
+        const subject = String(p.subject ?? "(No subject)");
+        const body = String(p.body ?? "");
+        const generatedAt = p.generatedAt != null ? String(p.generatedAt) : null;
+        return (
+          <div className="space-y-2">
+            <span className="inline-block rounded bg-indigo-100 px-1.5 py-0.5 text-xs font-medium text-indigo-800">
+              AI Email Draft
+            </span>
+            {generatedAt && (
+              <p className="text-xs text-gray-500">
+                Generated {new Date(generatedAt).toLocaleDateString()} at{" "}
+                {new Date(generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            )}
+            <p className="text-sm font-medium text-gray-900">{subject}</p>
+            <p className="text-sm text-gray-700 line-clamp-3 whitespace-pre-wrap">{body || "(No body)"}</p>
+          </div>
+        );
+      }
       case "ai_summary": {
         const bullets = Array.isArray(p.summaryBullets) ? p.summaryBullets : [];
         const risks = Array.isArray(p.risks) ? p.risks : [];
@@ -246,7 +299,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
   );
 }
 
-export function ActivityTimeline({ entityType, entityId, refreshTrigger }: ActivityTimelineProps) {
+export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEmailConfig }: ActivityTimelineProps) {
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -257,6 +310,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [aiSummaryModalOpen, setAiSummaryModalOpen] = useState(false);
   const [nextActionsModalOpen, setNextActionsModalOpen] = useState(false);
+  const [draftEmailModalOpen, setDraftEmailModalOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const fetchActivities = useCallback(async () => {
@@ -304,6 +358,13 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
     setTimeout(() => setToast(null), 4000);
   };
 
+  const handleDraftEmailSuccess = () => {
+    setPage(1);
+    fetchActivities();
+    setToast({ type: "success", message: "Draft email generated." });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   return (
     <div className="mt-4 border-t border-gray-200 pt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -323,26 +384,47 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
               </option>
             ))}
           </select>
-          <button
+          <IconButton
             onClick={() => setAiSummaryModalOpen(true)}
-            className="rounded-md border border-purple-300 bg-purple-50 px-3 py-1.5 text-sm font-medium text-purple-700 hover:bg-purple-100"
+            title="Generate AI Summary"
+            className="border-purple-300 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700"
           >
-            Generate AI Summary
-          </button>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <path d="M15.98 1.804a1 1 0 0 0-1.96 0l-.24 1.192a1 1 0 0 1-.784.785l-1.192.238a1 1 0 0 0 0 1.962l1.192.238a1 1 0 0 1 .785.785l.238 1.192a1 1 0 0 0 1.962 0l.238-1.192a1 1 0 0 1 .785-.785l1.192-.238a1 1 0 0 0 0-1.962l-1.192-.238a1 1 0 0 1-.785-.785l-.238-1.192ZM4.949 4.879a1 1 0 0 0-1.898 0l-.308 1.544a1 1 0 0 1-.711.711L.488 7.842a1 1 0 0 0 0 1.898l1.544.308a1 1 0 0 1 .711.711l.308 1.544a1 1 0 0 0 1.898 0l.308-1.544a1 1 0 0 1 .711-.711l1.544-.308a1 1 0 0 0 0-1.898l-1.544-.308a1 1 0 0 1-.711-.711l-.308-1.544ZM12.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+            </svg>
+          </IconButton>
           {canUseNextActions && (
-            <button
+            <IconButton
               onClick={() => setNextActionsModalOpen(true)}
-              className="rounded-md border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+              title="Next Best Actions"
+              className="border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700"
             >
-              Next Best Actions
-            </button>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                <path fillRule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75Zm0 10.5a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75ZM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10Z" clipRule="evenodd" />
+              </svg>
+            </IconButton>
           )}
-          <button
+          {canUseNextActions && draftEmailConfig && (
+            <IconButton
+              onClick={() => setDraftEmailModalOpen(true)}
+              title="Draft Email"
+              className="border-teal-300 bg-teal-50 text-teal-600 hover:bg-teal-100 hover:text-teal-700"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                <path d="M3 4a2 2 0 0 0-2 2v1.161l8.441 4.221a1.25 1.25 0 0 0 1.118 0L19 7.162V6a2 2 0 0 0-2-2H3Z" />
+                <path d="m19 8.839-7.77 3.885a2.75 2.75 0 0 1-2.46 0L1 8.839V14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.839Z" />
+              </svg>
+            </IconButton>
+          )}
+          <IconButton
             onClick={() => setAddModalOpen(true)}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            title="Add Activity"
+            className="border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
           >
-            Add Activity
-          </button>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+            </svg>
+          </IconButton>
         </div>
       </div>
 
@@ -406,6 +488,17 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger }: Activ
           entityType={entityType}
           entityId={entityId}
           onSuccess={handleNextActionsSuccess}
+        />
+      )}
+      {draftEmailConfig && (
+        <DraftEmailModal
+          isOpen={draftEmailModalOpen}
+          onClose={() => setDraftEmailModalOpen(false)}
+          entityType={entityType}
+          entityId={entityId}
+          defaultRecipientEmail={draftEmailConfig.defaultRecipientEmail}
+          suggestedRecipients={draftEmailConfig.suggestedRecipients}
+          onSuccess={handleDraftEmailSuccess}
         />
       )}
     </div>

@@ -86,7 +86,96 @@ export class AiContextService {
       .join('\n');
   }
 
-  private async loadAttachmentText(_entityType: string, _entityId: string): Promise<string> {
-    return '';
+  private async loadAttachmentText(
+    entityType: string,
+    entityId: string,
+    maxChars: number = 8000,
+  ): Promise<string> {
+    const attachments = await this.prisma.attachment.findMany({
+      where: { entityType, entityId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    const snippets: string[] = [];
+    let total = 0;
+    for (const a of attachments) {
+      if (!a.extractedText || total >= maxChars) break;
+      const text = a.extractedText.slice(0, maxChars - total);
+      snippets.push(`[${a.fileName}]: ${text}`);
+      total += text.length + a.fileName.length + 4;
+    }
+    if (snippets.length === 0) return '';
+    return `\n\n## Attachment excerpts\n${snippets.join('\n\n')}`;
+  }
+
+  async buildEmailContextPack(
+    entityType: (typeof ENTITY_TYPES)[number],
+    entityId: string,
+    recipientEmail?: string,
+    additionalContext?: string,
+    maxTotalChars: number = 24000,
+  ): Promise<string> {
+    const [entityText, activitiesText, attachmentText] = await Promise.all([
+      this.loadEntitySnapshot(entityType, entityId),
+      this.loadActivitiesText(entityType, entityId, 30, 50),
+      this.loadAttachmentText(entityType, entityId, 8000),
+    ]);
+
+    let recipientSection = '';
+    if (recipientEmail) {
+      const inferred = await this.inferRecipientInfo(entityType, entityId, recipientEmail);
+      recipientSection = `\n\n## Recipient\nEmail: ${recipientEmail}${inferred ? `\nName: ${inferred}` : ''}`;
+    } else {
+      const suggested = await this.getSuggestedRecipients(entityType, entityId);
+      if (suggested.length > 0) {
+        recipientSection =
+          '\n\n## Suggested recipients (from related contacts)\n' +
+          suggested.map((r) => `${r.name ?? '—'}: ${r.email}`).join('\n');
+      }
+    }
+
+    const base = `## Entity snapshot\n${entityText}\n\n## Recent activities\n${activitiesText}${attachmentText}${recipientSection}`;
+    const withContext = additionalContext
+      ? `${base}\n\n## Additional context\n${additionalContext}`
+      : base;
+    return withContext.slice(0, maxTotalChars);
+  }
+
+  private async inferRecipientInfo(
+    entityType: string,
+    entityId: string,
+    email: string,
+  ): Promise<string | null> {
+    if (entityType === 'contact') {
+      const c = await this.prisma.contact.findUnique({ where: { id: entityId } });
+      if (c?.email === email) return `${c.firstName} ${c.lastName}`.trim();
+    }
+    if (entityType === 'lead') {
+      const l = await this.prisma.lead.findUnique({ where: { id: entityId } });
+      if (l?.email === email) return l.name;
+    }
+    return null;
+  }
+
+  private async getSuggestedRecipients(
+    entityType: string,
+    entityId: string,
+  ): Promise<{ name?: string; email: string }[]> {
+    let accountId: string | null = null;
+    if (entityType === 'opportunity') {
+      const o = await this.prisma.opportunity.findUnique({ where: { id: entityId } });
+      accountId = o?.accountId ?? null;
+    } else if (entityType === 'account') {
+      accountId = entityId;
+    }
+    if (!accountId) return [];
+    const contacts = await this.prisma.contact.findMany({
+      where: { accountId },
+      take: 10,
+    });
+    return contacts.map((c) => ({
+      name: `${c.firstName} ${c.lastName}`.trim(),
+      email: c.email,
+    }));
   }
 }

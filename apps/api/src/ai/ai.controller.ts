@@ -3,7 +3,8 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { Activity } from '@crm/db';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
-import { AiService, type NextActionsResponse } from './ai.service';
+import { AiService, type DraftEmailResult, type NextActionsResponse } from './ai.service';
+import { DraftEmailDto, LogDraftEmailDto } from './dto/draft-email.dto';
 import { ConvertActionDto } from './dto/next-actions.dto';
 import { NextActionsDto } from './dto/next-actions.dto';
 import { GenerateSummaryDto } from './dto/summary.dto';
@@ -13,6 +14,30 @@ import { GenerateSummaryDto } from './dto/summary.dto';
 @ApiBearerAuth()
 export class AiController {
   constructor(private readonly aiService: AiService) {}
+
+  @Post('draft-email/:activityId/log')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Log AI draft email as outbound email activity' })
+  @ApiResponse({ status: 201, description: 'Email activity created' })
+  @ApiResponse({ status: 400, description: 'Invalid activity' })
+  @ApiResponse({ status: 404, description: 'Activity not found' })
+  logDraftEmail(
+    @Param('activityId') activityId: string,
+    @Body() dto: LogDraftEmailDto,
+  ): Promise<Activity> {
+    return this.aiService.logDraftEmailAsOutbound(activityId, dto.toEmail);
+  }
+
+  @Post('draft-email')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Generate AI draft email for an entity' })
+  @ApiResponse({ status: 201, description: 'Draft email activity created' })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  @ApiResponse({ status: 404, description: 'Entity not found' })
+  @ApiResponse({ status: 503, description: 'AI service unavailable' })
+  generateDraftEmail(@Body() dto: DraftEmailDto): Promise<DraftEmailResult> {
+    return this.aiService.generateDraftEmail(dto);
+  }
 
   @Post('summary')
   @Roles(Role.ADMIN, Role.USER)

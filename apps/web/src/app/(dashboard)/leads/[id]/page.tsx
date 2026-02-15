@@ -325,6 +325,7 @@ export default function LeadDetailPage() {
             entityType="lead"
             entityId={lead.id}
             refreshTrigger={timelineRefreshKey}
+            draftEmailConfig={{ defaultRecipientEmail: lead.email }}
           />
         </div>
       </div>

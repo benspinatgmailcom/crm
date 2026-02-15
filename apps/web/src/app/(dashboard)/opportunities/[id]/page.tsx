@@ -340,6 +340,12 @@ export default function OpportunityDetailPage() {
             entityType="opportunity"
             entityId={opportunity.id}
             refreshTrigger={timelineRefreshKey}
+            draftEmailConfig={{
+              suggestedRecipients: contacts.map((c) => ({
+                name: `${c.firstName} ${c.lastName}`.trim(),
+                email: c.email,
+              })),
+            }}
           />
         </div>
       </div>

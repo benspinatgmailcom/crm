@@ -394,7 +394,11 @@ export default function AccountDetailPage() {
                   ) : (
                     contacts.map((c) => (
                       <tr key={c.id}>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{c.firstName} {c.lastName}</td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <Link href={`/contacts/${c.id}`} className="text-blue-600 hover:underline">
+                            {c.firstName} {c.lastName}
+                          </Link>
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{c.email}</td>
                         <td className="px-4 py-3 text-right">
                           <button onClick={() => openEditContact(c)} className="text-sm text-blue-600 hover:underline mr-2">Edit</button>
@@ -433,7 +437,11 @@ export default function AccountDetailPage() {
                   ) : (
                     opportunities.map((o) => (
                       <tr key={o.id}>
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{o.name}</td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <Link href={`/opportunities/${o.id}`} className="text-blue-600 hover:underline">
+                            {o.name}
+                          </Link>
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{formatAmount(o.amount)}</td>
                         <td className="px-4 py-3 text-sm text-gray-500">{o.stage ?? "—"}</td>
                         <td className="px-4 py-3 text-right">
