@@ -9,6 +9,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { accountSchema, contactSchema, opportunitySchema, type AccountFormData, type ContactFormData, type OpportunityFormData } from "@/lib/validation";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 
 interface Account {
   id: string;
@@ -48,6 +50,8 @@ function formatAmount(amount: { toString(): string } | null): string {
 export default function AccountDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const id = params.id as string;
 
   const [account, setAccount] = useState<Account | null>(null);
@@ -311,6 +315,7 @@ export default function AccountDetailPage() {
         <Link href="/accounts" className="text-sm text-accent-1 hover:underline">← Back to Accounts</Link>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-semibold text-gray-900">{account.name}</h1>
+          {canEdit && (
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setEditAccountOpen(true)}
@@ -331,6 +336,7 @@ export default function AccountDetailPage() {
               Add Opportunity
             </button>
           </div>
+          )}
         </div>
       </div>
 
@@ -373,9 +379,11 @@ export default function AccountDetailPage() {
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-gray-900">Related Contacts</h2>
+              {canEdit && (
               <button onClick={openAddContact} className="rounded-md bg-accent-1 px-3 py-1.5 text-sm font-medium text-white hover:brightness-90">
                 Add
               </button>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -401,8 +409,12 @@ export default function AccountDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{c.email}</td>
                         <td className="px-4 py-3 text-right">
+                          {canEdit && (
+                          <>
                           <button onClick={() => openEditContact(c)} className="text-sm text-accent-1 hover:underline mr-2">Edit</button>
                           <button onClick={() => setContactDeleteId(c.id)} className="text-sm text-red-600 hover:underline">Delete</button>
+                          </>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -415,9 +427,11 @@ export default function AccountDetailPage() {
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-gray-900">Related Opportunities</h2>
+              {canEdit && (
               <button onClick={openAddOpp} className="rounded-md bg-accent-1 px-3 py-1.5 text-sm font-medium text-white hover:brightness-90">
                 Add
               </button>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
@@ -445,8 +459,12 @@ export default function AccountDetailPage() {
                         <td className="px-4 py-3 text-sm text-gray-500">{formatAmount(o.amount)}</td>
                         <td className="px-4 py-3 text-sm text-gray-500">{o.stage ?? "—"}</td>
                         <td className="px-4 py-3 text-right">
+                          {canEdit && (
+                          <>
                           <button onClick={() => openEditOpp(o)} className="text-sm text-accent-1 hover:underline mr-2">Edit</button>
                           <button onClick={() => setOppDeleteId(o.id)} className="text-sm text-red-600 hover:underline">Delete</button>
+                          </>
+                          )}
                         </td>
                       </tr>
                     ))

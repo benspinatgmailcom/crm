@@ -5,8 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
+import { isAdmin } from "@/lib/roles";
 import { ApiStatus } from "@/components/api-status";
 import { GlobalSearch } from "@/components/global-search";
+import { QuickCreateDropdown } from "@/components/quick-create-dropdown";
 
 const logoUrl = typeof process.env.NEXT_PUBLIC_LOGO_URL === "string" && process.env.NEXT_PUBLIC_LOGO_URL.trim()
   ? process.env.NEXT_PUBLIC_LOGO_URL.trim()
@@ -87,7 +89,7 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
-            {isDev && user?.role === "ADMIN" && (
+            {isDev && isAdmin(user?.role) && (
               <Link
                 href="/dev"
                 className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
@@ -110,6 +112,7 @@ export default function DashboardLayout({
           <ApiStatus className="text-white/80" />
           <div className="flex-1" />
           <GlobalSearch />
+          <QuickCreateDropdown />
           <div className="relative flex items-center gap-4">
             <span className="text-sm text-white/80">{user?.email}</span>
             <button

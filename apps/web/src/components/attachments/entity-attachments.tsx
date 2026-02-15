@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -38,6 +40,8 @@ export function EntityAttachments({
   entityId,
   onUploadSuccess,
 }: EntityAttachmentsProps) {
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -133,12 +137,14 @@ export function EntityAttachments({
     <div className="mt-4 border-t border-gray-200 pt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-sm font-semibold text-gray-900">Attachments</h3>
+        {canEdit && (
         <button
           onClick={() => setUploadModalOpen(true)}
           className="rounded-md bg-accent-1 px-3 py-1.5 text-sm font-medium text-white hover:brightness-90"
         >
           Upload
         </button>
+        )}
       </div>
       {loading ? (
         <p className="mt-3 text-sm text-gray-500">Loading...</p>
@@ -164,12 +170,14 @@ export function EntityAttachments({
                 >
                   Download
                 </button>
+                {canEdit && (
                 <button
                   onClick={() => setDeleteId(a.id)}
                   className="text-red-600 hover:underline"
                 >
                   Delete
                 </button>
+                )}
               </div>
             </li>
           ))}

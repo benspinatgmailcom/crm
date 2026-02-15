@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
+import { isAdmin } from "@/lib/roles";
 import { apiFetch } from "@/lib/api-client";
 
 interface SeedStoryResult {
@@ -20,7 +21,7 @@ export default function DevPage() {
   const [reset, setReset] = useState(false);
 
   useEffect(() => {
-    if (user && user.role !== "ADMIN") {
+    if (user && !isAdmin(user.role)) {
       router.replace("/accounts");
     }
   }, [user, router]);
@@ -57,7 +58,7 @@ export default function DevPage() {
     router.push(`/accounts/${id}`);
   };
 
-  if (user && user.role !== "ADMIN") {
+  if (user && !isAdmin(user.role)) {
     return (
       <div className="max-w-2xl">
         <p className="text-sm text-gray-600">Access denied. Admin only.</p>

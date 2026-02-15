@@ -7,6 +7,8 @@ import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { opportunitySchema, type OpportunityFormData } from "@/lib/validation";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 
 interface Opportunity {
   id: string;
@@ -35,7 +37,10 @@ const STAGE_OPTIONS = ["prospecting", "discovery", "proposal", "negotiation", "c
 export default function OpportunitiesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const viewId = searchParams.get("viewId");
+  const createParam = searchParams.get("create");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +73,13 @@ export default function OpportunitiesPage() {
   useEffect(() => {
     if (viewId) router.replace(`/opportunities/${viewId}`);
   }, [viewId, router]);
+
+  useEffect(() => {
+    if (createParam === "1" && canEdit) {
+      openCreate();
+      router.replace("/opportunities", { scroll: false });
+    }
+  }, [createParam, canEdit]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
@@ -183,14 +195,16 @@ export default function OpportunitiesPage() {
             closeDate: parsed.data.closeDate,
           }),
         });
+        setModalOpen(false);
+        fetchData();
       } else {
-        await apiFetch("/opportunities", {
+        const created = await apiFetch<{ id: string }>("/opportunities", {
           method: "POST",
           body: JSON.stringify(parsed.data),
         });
+        setModalOpen(false);
+        router.push(`/opportunities/${created.id}`);
       }
-      setModalOpen(false);
-      fetchData();
     } catch (err: unknown) {
       const e = err as { body?: { message?: string } };
       setSubmitError(e.body?.message || "Failed to save");
@@ -219,12 +233,14 @@ export default function OpportunitiesPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Opportunities</h1>
+        {canEdit && (
         <button
           onClick={openCreate}
           className="rounded-md bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90"
         >
           New
         </button>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -301,6 +317,8 @@ export default function OpportunitiesPage() {
                         >
                           View
                         </button>
+                        {canEdit && (
+                        <>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -319,6 +337,8 @@ export default function OpportunitiesPage() {
                         >
                           Delete
                         </button>
+                        </>
+                        )}
                       </div>
                     </td>
                   </tr>

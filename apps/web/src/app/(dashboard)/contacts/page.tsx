@@ -7,6 +7,8 @@ import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { contactSchema, type ContactFormData } from "@/lib/validation";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 
 interface Contact {
   id: string;
@@ -32,7 +34,10 @@ interface PaginatedResponse {
 export default function ContactsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const viewId = searchParams.get("viewId");
+  const createParam = searchParams.get("create");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +69,13 @@ export default function ContactsPage() {
   useEffect(() => {
     if (viewId) router.replace(`/contacts/${viewId}`);
   }, [viewId, router]);
+
+  useEffect(() => {
+    if (createParam === "1" && canEdit) {
+      openCreate();
+      router.replace("/contacts", { scroll: false });
+    }
+  }, [createParam, canEdit]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
@@ -172,14 +184,16 @@ export default function ContactsPage() {
             phone: parsed.data.phone,
           }),
         });
+        setModalOpen(false);
+        fetchData();
       } else {
-        await apiFetch("/contacts", {
+        const created = await apiFetch<{ id: string }>("/contacts", {
           method: "POST",
           body: JSON.stringify(parsed.data),
         });
+        setModalOpen(false);
+        router.push(`/contacts/${created.id}`);
       }
-      setModalOpen(false);
-      fetchData();
     } catch (err: unknown) {
       const e = err as { body?: { message?: string } };
       setSubmitError(e.body?.message || "Failed to save");
@@ -206,12 +220,14 @@ export default function ContactsPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Contacts</h1>
+        {canEdit && (
         <button
           onClick={openCreate}
           className="rounded-md bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90"
         >
           New
         </button>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -279,6 +295,8 @@ export default function ContactsPage() {
                         >
                           View
                         </button>
+                        {canEdit && (
+                        <>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -297,6 +315,8 @@ export default function ContactsPage() {
                         >
                           Delete
                         </button>
+                        </>
+                        )}
                       </div>
                     </td>
                   </tr>

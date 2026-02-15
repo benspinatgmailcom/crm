@@ -5,6 +5,7 @@ import { apiFetch, apiDownloadFile, apiDelete } from "@/lib/api-client";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 import {
   ALL_ACTIVITY_TYPES,
   ACTIVITY_TYPE_LABELS,
@@ -195,7 +196,7 @@ export function EntityActivityTimeline({
   refreshTrigger,
 }: EntityActivityTimelineProps) {
   const { user } = useAuth();
-  const canDelete = user?.role === "ADMIN" || user?.role === "USER";
+  const canDelete = canWrite(user?.role);
   const [data, setData] = useState<PaginatedActivities | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);

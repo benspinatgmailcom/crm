@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { apiFetch, apiUpload, apiDownloadFile, apiDelete } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 import type { ActivityEntityType } from "./entity-activity-timeline";
 
 interface Attachment {
@@ -35,7 +36,7 @@ export function EntityAttachmentsPanel({
   onSuccess,
 }: EntityAttachmentsPanelProps) {
   const { user } = useAuth();
-  const canDelete = user?.role === "ADMIN" || user?.role === "USER";
+  const canDelete = canWrite(user?.role);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -128,6 +129,7 @@ export function EntityAttachmentsPanel({
       />
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-900">Attachments</h3>
+        {canDelete && (
         <div className="flex items-center gap-2">
           <input
             ref={inputRef}
@@ -146,6 +148,7 @@ export function EntityAttachmentsPanel({
             {uploading ? "Uploading..." : "Attach File"}
           </button>
         </div>
+        )}
       </div>
       {loading ? (
         <p className="text-sm text-gray-500">Loading attachments...</p>
