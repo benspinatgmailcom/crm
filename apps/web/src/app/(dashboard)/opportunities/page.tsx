@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
@@ -232,7 +233,23 @@ export default function OpportunitiesPage() {
   return (
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Opportunities</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold text-gray-900">Opportunities</h1>
+          <div className="flex rounded-lg border border-gray-200 p-0.5">
+            <Link
+              href="/opportunities"
+              className="rounded-md bg-accent-1 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              List
+            </Link>
+            <Link
+              href="/opportunities/pipeline"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100"
+            >
+              Pipeline
+            </Link>
+          </div>
+        </div>
         {canEdit && (
         <button
           onClick={openCreate}

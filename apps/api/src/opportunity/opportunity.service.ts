@@ -26,6 +26,72 @@ export class OpportunityService {
     });
   }
 
+  private static readonly PIPELINE_STAGES = [
+    'prospecting',
+    'qualification',
+    'discovery',
+    'proposal',
+    'negotiation',
+    'closed-won',
+    'closed-lost',
+  ] as const;
+
+  async getPipeline(): Promise<Record<string, Array<{
+    id: string;
+    name: string;
+    amount: { toString(): string } | null;
+    closeDate: Date | null;
+    stage: string | null;
+    accountId: string;
+    accountName: string;
+  }>>> {
+    const opportunities = await this.prisma.opportunity.findMany({
+      select: {
+        id: true,
+        name: true,
+        amount: true,
+        closeDate: true,
+        stage: true,
+        accountId: true,
+        account: { select: { name: true } },
+      },
+    });
+
+    const result: Record<string, Array<{
+      id: string;
+      name: string;
+      amount: { toString(): string } | null;
+      closeDate: Date | null;
+      stage: string | null;
+      accountId: string;
+      accountName: string;
+    }>> = {};
+    for (const s of OpportunityService.PIPELINE_STAGES) {
+      result[s] = [];
+    }
+    result['_other'] = [];
+
+    for (const o of opportunities) {
+      const stage = o.stage || 'prospecting';
+      const entry = {
+        id: o.id,
+        name: o.name,
+        amount: o.amount,
+        closeDate: o.closeDate,
+        stage: o.stage,
+        accountId: o.accountId,
+        accountName: o.account.name,
+      };
+      if (OpportunityService.PIPELINE_STAGES.includes(stage as (typeof OpportunityService.PIPELINE_STAGES)[number])) {
+        result[stage].push(entry);
+      } else {
+        result['_other'].push(entry);
+      }
+    }
+
+    return result;
+  }
+
   async findAll(query: QueryOpportunityDto): Promise<PaginatedResult<Opportunity>> {
     const { page = 1, pageSize = 20, name, accountId, stage, sortBy = 'createdAt', sortDir = 'desc' } = query;
 

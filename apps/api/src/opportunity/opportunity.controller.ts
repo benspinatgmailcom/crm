@@ -25,6 +25,22 @@ export class OpportunityController {
     return this.opportunityService.create(dto);
   }
 
+  @Get('pipeline')
+  @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
+  @ApiOperation({ summary: 'Get opportunities grouped by stage for pipeline/Kanban view' })
+  @ApiResponse({ status: 200, description: 'Returns { [stage]: [{ id, name, amount, closeDate, stage, accountId, accountName }] }' })
+  getPipeline(): Promise<Record<string, Array<{
+    id: string;
+    name: string;
+    amount: { toString(): string } | null;
+    closeDate: Date | null;
+    stage: string | null;
+    accountId: string;
+    accountName: string;
+  }>>> {
+    return this.opportunityService.getPipeline();
+  }
+
   @Get()
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
   @ApiOperation({
