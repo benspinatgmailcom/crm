@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
-import { ActivityTimeline } from "@/components/activity/activity-timeline";
-import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { opportunitySchema, type OpportunityFormData } from "@/lib/validation";
@@ -34,6 +33,9 @@ interface PaginatedResponse {
 const STAGE_OPTIONS = ["prospecting", "discovery", "proposal", "negotiation", "closed-won", "closed-lost"];
 
 export default function OpportunitiesPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const viewId = searchParams.get("viewId");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,8 +64,10 @@ export default function OpportunitiesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<Opportunity | null>(null);
-  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (viewId) router.replace(`/opportunities/${viewId}`);
+  }, [viewId, router]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(nameFilter), 300);
@@ -277,7 +281,11 @@ export default function OpportunitiesPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {(data?.data ?? []).map((opp) => (
-                  <tr key={opp.id}>
+                  <tr
+                    key={opp.id}
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => router.push(`/opportunities/${opp.id}`)}
+                  >
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{opp.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{accountName(opp.accountId)}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{formatAmount(opp.amount)}</td>
@@ -285,22 +293,28 @@ export default function OpportunitiesPage() {
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {opp.closeDate ? new Date(opp.closeDate).toLocaleDateString() : "—"}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => setViewing(opp)}
+                          onClick={() => router.push(`/opportunities/${opp.id}`)}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           View
                         </button>
                         <button
-                          onClick={() => openEdit(opp)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(opp);
+                          }}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => setDeleteId(opp.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteId(opp.id);
+                          }}
                           className="text-sm text-red-600 hover:underline"
                         >
                           Delete
@@ -444,51 +458,6 @@ export default function OpportunitiesPage() {
             </button>
           </div>
         </form>
-      </Modal>
-
-      <Modal isOpen={!!viewing} onClose={() => setViewing(null)} title="Opportunity Details">
-        {viewing && (
-          <>
-            <dl className="space-y-2">
-              <div>
-                <dt className="text-sm text-gray-500">Name</dt>
-                <dd className="text-sm font-medium">{viewing.name}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Account</dt>
-                <dd className="text-sm">{accountName(viewing.accountId)}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Amount</dt>
-                <dd className="text-sm">{formatAmount(viewing.amount)}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Stage</dt>
-                <dd className="text-sm">{viewing.stage ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Probability</dt>
-                <dd className="text-sm">{viewing.probability != null ? `${viewing.probability}%` : "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Close Date</dt>
-                <dd className="text-sm">
-                  {viewing.closeDate ? new Date(viewing.closeDate).toLocaleDateString() : "—"}
-                </dd>
-              </div>
-            </dl>
-            <EntityAttachments
-              entityType="opportunity"
-              entityId={viewing.id}
-              onUploadSuccess={() => setTimelineRefreshKey((k) => k + 1)}
-            />
-            <ActivityTimeline
-              entityType="opportunity"
-              entityId={viewing.id}
-              refreshTrigger={timelineRefreshKey}
-            />
-          </>
-        )}
       </Modal>
 
       <ConfirmDialog
