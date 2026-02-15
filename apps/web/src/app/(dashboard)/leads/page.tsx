@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
-import { ActivityTimeline } from "@/components/activity/activity-timeline";
-import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { leadSchema, type LeadFormData } from "@/lib/validation";
@@ -28,6 +27,9 @@ interface PaginatedResponse {
 const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified"];
 
 export default function LeadsPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const viewId = searchParams.get("viewId");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +53,10 @@ export default function LeadsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<Lead | null>(null);
-  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (viewId) router.replace(`/leads/${viewId}`);
+  }, [viewId, router]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(qFilter), 300);
@@ -218,27 +222,37 @@ export default function LeadsPage() {
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {(data?.data ?? []).map((lead) => (
-                  <tr key={lead.id}>
+                  <tr
+                    key={lead.id}
+                    className="cursor-pointer hover:bg-gray-50"
+                    onClick={() => router.push(`/leads/${lead.id}`)}
+                  >
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{lead.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{lead.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{lead.company ?? "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{lead.status ?? "—"}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => setViewing(lead)}
+                          onClick={() => router.push(`/leads/${lead.id}`)}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           View
                         </button>
                         <button
-                          onClick={() => openEdit(lead)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(lead);
+                          }}
                           className="text-sm text-blue-600 hover:underline"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => setDeleteId(lead.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteId(lead.id);
+                          }}
                           className="text-sm text-red-600 hover:underline"
                         >
                           Delete
@@ -342,45 +356,6 @@ export default function LeadsPage() {
             </button>
           </div>
         </form>
-      </Modal>
-
-      <Modal isOpen={!!viewing} onClose={() => setViewing(null)} title="Lead Details">
-        {viewing && (
-          <>
-            <dl className="space-y-2">
-              <div>
-                <dt className="text-sm text-gray-500">Name</dt>
-                <dd className="text-sm font-medium">{viewing.name}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Email</dt>
-                <dd className="text-sm">{viewing.email}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Company</dt>
-                <dd className="text-sm">{viewing.company ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Status</dt>
-                <dd className="text-sm">{viewing.status ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-500">Source</dt>
-                <dd className="text-sm">{viewing.source ?? "—"}</dd>
-              </div>
-            </dl>
-            <EntityAttachments
-              entityType="lead"
-              entityId={viewing.id}
-              onUploadSuccess={() => setTimelineRefreshKey((k) => k + 1)}
-            />
-            <ActivityTimeline
-              entityType="lead"
-              entityId={viewing.id}
-              refreshTrigger={timelineRefreshKey}
-            />
-          </>
-        )}
       </Modal>
 
       <ConfirmDialog
