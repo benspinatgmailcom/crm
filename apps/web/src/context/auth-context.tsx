@@ -14,26 +14,23 @@ import {
   getStoredUser,
   setTokens,
   clearTokens,
+  updateStoredUser,
+  type StoredUser,
 } from "@/lib/auth-store";
 
-interface User {
-  id: string;
-  email: string;
-  role: string;
-}
-
 interface AuthContextValue {
-  user: User | null;
+  user: StoredUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateUser: (updates: Partial<StoredUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<StoredUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
@@ -55,14 +52,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await apiFetch<{
         accessToken: string;
         refreshToken: string;
-        user: User;
+        user: StoredUser;
       }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
       setTokens(data.accessToken, data.refreshToken, data.user);
       setUser(data.user);
-      router.push("/accounts");
+      router.push(data.user.mustChangePassword ? "/change-password" : "/accounts");
     },
     [router]
   );
@@ -87,12 +84,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
+  const updateUser = useCallback((updates: Partial<StoredUser>) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : null));
+    updateStoredUser(updates);
+  }, []);
+
   const value: AuthContextValue = {
     user,
     isLoading,
     isAuthenticated: !!user,
     login,
     logout,
+    updateUser,
   };
 
   return (

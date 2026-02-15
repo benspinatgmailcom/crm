@@ -6,6 +6,7 @@ import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt.guard';
 import { AuthService, AuthTokens } from './auth.service';
 
@@ -71,5 +72,18 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async me(@CurrentUser('id') userId: string) {
     return this.authService.me(userId);
+  }
+
+  @Post('change-password')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Change password (required when mustChangePassword is true)' })
+  @ApiResponse({ status: 200, description: 'Password changed; returns updated user' })
+  @ApiResponse({ status: 400, description: 'Validation error (e.g. new password too short)' })
+  @ApiResponse({ status: 401, description: 'Current password incorrect' })
+  async changePassword(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(userId, dto);
   }
 }

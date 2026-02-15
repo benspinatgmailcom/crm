@@ -692,8 +692,9 @@ export default function PipelinePage() {
       if (f.account.trim()) params.set("account", f.account.trim());
       else params.delete("account");
       params.set("closed", f.includeClosed ? "1" : "0");
-      router.replace(`/opportunities/pipeline?${params.toString()}`, {
-        scroll: false,
+      const url = `/opportunities/pipeline?${params.toString()}`;
+      queueMicrotask(() => {
+        router.replace(url, { scroll: false });
       });
     },
     [router, searchParams]
@@ -1105,7 +1106,10 @@ export default function PipelinePage() {
             </div>
             <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
               <div className="flex gap-4 overflow-x-auto pb-4">
-                {STAGE_ORDER.map((stageId) => {
+                {STAGE_ORDER.filter(
+                  (s) =>
+                    filters.includeClosed || (s !== "closed-won" && s !== "closed-lost")
+                ).map((stageId) => {
                   const opps = filteredData?.[stageId] ?? [];
                   const stTotal = opps.reduce(
                     (sum, o) => sum + toNumber(o.amount),

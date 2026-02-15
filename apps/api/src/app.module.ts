@@ -16,6 +16,7 @@ import { ActivityModule } from './activity/activity.module';
 import { AiModule } from './ai/ai.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { SearchModule } from './search/search.module';
+import { UsersModule } from './users/users.module';
 
 const devOnly = process.env.NODE_ENV !== 'production';
 
@@ -31,6 +32,7 @@ const devOnly = process.env.NODE_ENV !== 'production';
     ActivityModule,
     AiModule,
     AttachmentsModule,
+    UsersModule,
     ...(devOnly ? [DevModule] : []),
   ],
   controllers: [AppController, HealthController],

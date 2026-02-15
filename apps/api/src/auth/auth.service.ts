@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Role } from './constants';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { authConfig } from './auth.config';
 
 export interface JwtPayload {
@@ -60,6 +61,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.isActive === false) {
+      throw new ForbiddenException('Account is deactivated');
+    }
+
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) {
       throw new UnauthorizedException('Invalid credentials');
@@ -95,8 +100,12 @@ export class AuthService {
 
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true },
+      select: { id: true, email: true, role: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true, passwordHash: true },
     });
+
+    if (user.isActive === false) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
 
     const tokens = await this.issueTokens(user as User);
     return { ...tokens, user };
@@ -116,10 +125,28 @@ export class AuthService {
   async me(userId: string): Promise<Omit<User, 'passwordHash'>> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true },
+      select: { id: true, email: true, role: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true },
     });
     if (!user) throw new UnauthorizedException('User not found');
     return user;
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<Omit<User, 'passwordHash'>> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException('User not found');
+
+    const valid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+      select: { id: true, email: true, role: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true },
+    });
+    return updated;
   }
 
   private async createUser(email: string, password: string, role: Role): Promise<User> {
@@ -211,6 +238,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
-    return user ?? null;
+    if (!user || user.isActive === false) return null;
+    return user;
   }
 }

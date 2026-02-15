@@ -5,17 +5,17 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/auth-context";
 
 export default function HomePage() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
     if (isAuthenticated) {
-      router.replace("/accounts");
+      router.replace(user?.mustChangePassword ? "/change-password" : "/accounts");
     } else {
       router.replace("/login");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, user?.mustChangePassword, router]);
 
   return (
     <main className="flex min-h-screen items-center justify-center">
