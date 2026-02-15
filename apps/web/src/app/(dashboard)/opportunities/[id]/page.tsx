@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
@@ -45,6 +47,8 @@ function formatAmount(amount: { toString(): string } | null): string {
 
 export default function OpportunityDetailPage() {
   const params = useParams();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const id = params.id as string;
 
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
@@ -220,12 +224,14 @@ export default function OpportunityDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canEdit && (
             <button
               onClick={openEdit}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Edit Opportunity
             </button>
+            )}
           </div>
         </div>
       </div>

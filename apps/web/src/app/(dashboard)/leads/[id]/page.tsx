@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
@@ -34,6 +36,8 @@ const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified"];
 
 export default function LeadDetailPage() {
   const params = useParams();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const id = params.id as string;
 
   const [lead, setLead] = useState<Lead | null>(null);
@@ -212,6 +216,7 @@ export default function LeadDetailPage() {
               {lead.source && <span className="text-gray-500">Source: {lead.source}</span>}
             </div>
           </div>
+          {canEdit && (
           <div className="flex flex-wrap gap-2">
             <button
               onClick={openEdit}
@@ -220,6 +225,7 @@ export default function LeadDetailPage() {
               Edit Lead
             </button>
           </div>
+          )}
         </div>
       </div>
 
@@ -298,7 +304,7 @@ export default function LeadDetailPage() {
                   )}
                 </p>
               </div>
-            ) : (
+            ) : canEdit ? (
               <>
                 <p className="mb-3 text-sm text-gray-500">
                   Convert this lead to an Account, Contact, and Opportunity.
@@ -311,6 +317,8 @@ export default function LeadDetailPage() {
                   Convert to Account & Contact
                 </button>
               </>
+            ) : (
+              <p className="text-sm text-gray-500">You do not have permission to convert leads.</p>
             )}
           </div>
         </div>

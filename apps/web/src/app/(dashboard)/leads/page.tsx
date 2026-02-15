@@ -7,6 +7,8 @@ import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { leadSchema, type LeadFormData } from "@/lib/validation";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 
 interface Lead {
   id: string;
@@ -29,7 +31,10 @@ const STATUS_OPTIONS = ["new", "contacted", "qualified", "disqualified"];
 export default function LeadsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const viewId = searchParams.get("viewId");
+  const createParam = searchParams.get("create");
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +62,13 @@ export default function LeadsPage() {
   useEffect(() => {
     if (viewId) router.replace(`/leads/${viewId}`);
   }, [viewId, router]);
+
+  useEffect(() => {
+    if (createParam === "1" && canEdit) {
+      openCreate();
+      router.replace("/leads", { scroll: false });
+    }
+  }, [createParam, canEdit]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(qFilter), 300);
@@ -141,14 +153,16 @@ export default function LeadsPage() {
           method: "PATCH",
           body: JSON.stringify(parsed.data),
         });
+        setModalOpen(false);
+        fetchData();
       } else {
-        await apiFetch("/leads", {
+        const created = await apiFetch<{ id: string }>("/leads", {
           method: "POST",
           body: JSON.stringify(parsed.data),
         });
+        setModalOpen(false);
+        router.push(`/leads/${created.id}`);
       }
-      setModalOpen(false);
-      fetchData();
     } catch (err: unknown) {
       const e = err as { body?: { message?: string } };
       setSubmitError(e.body?.message || "Failed to save");
@@ -173,12 +187,14 @@ export default function LeadsPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Leads</h1>
+        {canEdit && (
         <button
           onClick={openCreate}
           className="rounded-md bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90"
         >
           New
         </button>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -239,6 +255,8 @@ export default function LeadsPage() {
                         >
                           View
                         </button>
+                        {canEdit && (
+                        <>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -257,6 +275,8 @@ export default function LeadsPage() {
                         >
                           Delete
                         </button>
+                        </>
+                        )}
                       </div>
                     </td>
                   </tr>

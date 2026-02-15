@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { Pagination } from "@/components/ui/pagination";
 import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 import { AddActivityModal } from "./add-activity-modal";
 import { GenerateAiSummaryModal } from "./generate-ai-summary-modal";
 import { DraftEmailModal } from "@/components/ai/draft-email-modal";
@@ -306,7 +307,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
   const [pageSize, setPageSize] = useState(10);
   const [typeFilter, setTypeFilter] = useState("");
   const { user } = useAuth();
-  const canUseNextActions = user?.role === "ADMIN" || user?.role === "USER";
+  const canEdit = canWrite(user?.role);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [aiSummaryModalOpen, setAiSummaryModalOpen] = useState(false);
   const [nextActionsModalOpen, setNextActionsModalOpen] = useState(false);
@@ -384,6 +385,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
               </option>
             ))}
           </select>
+          {canEdit && (
           <IconButton
             onClick={() => setAiSummaryModalOpen(true)}
             title="Generate AI Summary"
@@ -393,7 +395,8 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
               <path d="M15.98 1.804a1 1 0 0 0-1.96 0l-.24 1.192a1 1 0 0 1-.784.785l-1.192.238a1 1 0 0 0 0 1.962l1.192.238a1 1 0 0 1 .785.785l.238 1.192a1 1 0 0 0 1.962 0l.238-1.192a1 1 0 0 1 .785-.785l1.192-.238a1 1 0 0 0 0-1.962l-1.192-.238a1 1 0 0 1-.785-.785l-.238-1.192ZM4.949 4.879a1 1 0 0 0-1.898 0l-.308 1.544a1 1 0 0 1-.711.711L.488 7.842a1 1 0 0 0 0 1.898l1.544.308a1 1 0 0 1 .711.711l.308 1.544a1 1 0 0 0 1.898 0l.308-1.544a1 1 0 0 1 .711-.711l1.544-.308a1 1 0 0 0 0-1.898l-1.544-.308a1 1 0 0 1-.711-.711l-.308-1.544ZM12.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
             </svg>
           </IconButton>
-          {canUseNextActions && (
+          )}
+          {canEdit && (
             <IconButton
               onClick={() => setNextActionsModalOpen(true)}
               title="Next Best Actions"
@@ -404,7 +407,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
               </svg>
             </IconButton>
           )}
-          {canUseNextActions && draftEmailConfig && (
+          {canEdit && draftEmailConfig && (
             <IconButton
               onClick={() => setDraftEmailModalOpen(true)}
               title="Draft Email"
@@ -416,6 +419,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
               </svg>
             </IconButton>
           )}
+          {canEdit && (
           <IconButton
             onClick={() => setAddModalOpen(true)}
             title="Add Activity"
@@ -425,6 +429,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
               <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
             </svg>
           </IconButton>
+          )}
         </div>
       </div>
 
@@ -481,7 +486,7 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
         entityId={entityId}
         onSuccess={handleAiSummarySuccess}
       />
-      {canUseNextActions && (
+      {canEdit && (
         <GenerateNextBestActionsModal
           isOpen={nextActionsModalOpen}
           onClose={() => setNextActionsModalOpen(false)}

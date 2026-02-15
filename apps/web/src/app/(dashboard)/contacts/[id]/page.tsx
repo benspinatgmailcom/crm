@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
+import { useAuth } from "@/context/auth-context";
+import { canWrite } from "@/lib/roles";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
@@ -42,6 +44,8 @@ function formatAmount(amount: { toString(): string } | null): string {
 
 export default function ContactDetailPage() {
   const params = useParams();
+  const { user } = useAuth();
+  const canEdit = canWrite(user?.role);
   const id = params.id as string;
 
   const [contact, setContact] = useState<Contact | null>(null);
@@ -214,12 +218,14 @@ export default function ContactDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canEdit && (
             <button
               onClick={openEdit}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Edit Contact
             </button>
+            )}
           </div>
         </div>
       </div>
