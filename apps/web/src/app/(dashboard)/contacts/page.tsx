@@ -266,7 +266,7 @@ export default function ContactsPage() {
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => router.push(`/contacts/${contact.id}`)}
                   >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <td className="px-4 py-3 text-sm font-medium text-accent-1 hover:underline">
                       {contact.firstName} {contact.lastName}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">{contact.email}</td>

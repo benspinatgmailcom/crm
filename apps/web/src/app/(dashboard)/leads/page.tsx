@@ -227,7 +227,7 @@ export default function LeadsPage() {
                     className="cursor-pointer hover:bg-gray-50"
                     onClick={() => router.push(`/leads/${lead.id}`)}
                   >
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{lead.name}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-accent-1 hover:underline">{lead.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{lead.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{lead.company ?? "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{lead.status ?? "—"}</td>

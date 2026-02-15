@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
 import { ApiStatus } from "@/components/api-status";
+import { GlobalSearch } from "@/components/global-search";
 
 const logoUrl = typeof process.env.NEXT_PUBLIC_LOGO_URL === "string" && process.env.NEXT_PUBLIC_LOGO_URL.trim()
   ? process.env.NEXT_PUBLIC_LOGO_URL.trim()
@@ -105,8 +106,10 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="flex flex-1 flex-col">
         {/* Top bar */}
-        <header className="relative flex h-14 items-center justify-between border-b border-white/10 bg-slate-950 px-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-gradient-to-r before:from-accent-1/8 before:via-transparent before:to-accent-2/8">
+        <header className="relative flex h-14 items-center justify-between gap-4 border-b border-white/10 bg-slate-950 px-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-gradient-to-r before:from-accent-1/8 before:via-transparent before:to-accent-2/8">
           <ApiStatus className="text-white/80" />
+          <div className="flex-1" />
+          <GlobalSearch />
           <div className="relative flex items-center gap-4">
             <span className="text-sm text-white/80">{user?.email}</span>
             <button
