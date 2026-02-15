@@ -3,8 +3,13 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
 import { ApiStatus } from "@/components/api-status";
+
+const logoUrl = typeof process.env.NEXT_PUBLIC_LOGO_URL === "string" && process.env.NEXT_PUBLIC_LOGO_URL.trim()
+  ? process.env.NEXT_PUBLIC_LOGO_URL.trim()
+  : null;
 
 const navItems = [
   { href: "/accounts", label: "Accounts" },
@@ -46,34 +51,48 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 border-r border-gray-200 bg-gray-50">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-gray-200 p-4">
-            <Link href="/" className="text-lg font-semibold text-gray-900">
-              CRM
+      <aside className="relative w-56 flex-shrink-0 border-r border-white/10 bg-slate-950 shadow-[4px_0_12px_rgba(0,0,0,0.15)] before:pointer-events-none before:absolute before:inset-0 before:bg-gradient-to-r before:from-accent-1/10 before:via-transparent before:to-accent-2/10">
+        <div className="relative flex h-full flex-col">
+          <div className="flex h-14 shrink-0 items-center border-b border-white/10 px-6">
+            <Link href="/" className="group flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 rounded">
+              {logoUrl ? (
+                <Image
+                  src={logoUrl}
+                  alt="Logo"
+                  width={120}
+                  height={32}
+                  className="logo-glow-hover h-8 w-auto max-h-[34px] object-contain transition-[filter] duration-200 ease-out"
+                  unoptimized={logoUrl.startsWith("http")}
+                />
+              ) : (
+                <span className="text-lg font-semibold text-white">CRM</span>
+              )}
             </Link>
           </div>
-          <nav className="flex-1 space-y-0.5 p-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`block rounded-md px-3 py-2 text-sm font-medium ${
-                  pathname === item.href
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <nav className="flex flex-1 flex-col gap-0.5 px-4 py-3">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                    isActive
+                      ? "bg-accent-1/15 text-accent-1"
+                      : "text-white/80 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
             {isDev && user?.role === "ADMIN" && (
               <Link
                 href="/dev"
-                className={`block rounded-md px-3 py-2 text-sm font-medium ${
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   pathname === "/dev"
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-accent-1/15 text-accent-1"
+                    : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
                 Dev Tools
@@ -86,13 +105,13 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="flex flex-1 flex-col">
         {/* Top bar */}
-        <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4">
-          <ApiStatus />
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.email}</span>
+        <header className="relative flex h-14 items-center justify-between border-b border-white/10 bg-slate-950 px-6 shadow-[0_2px_8px_rgba(0,0,0,0.08)] before:pointer-events-none before:absolute before:inset-0 before:bg-gradient-to-r before:from-accent-1/8 before:via-transparent before:to-accent-2/8">
+          <ApiStatus className="text-white/80" />
+          <div className="relative flex items-center gap-4">
+            <span className="text-sm text-white/80">{user?.email}</span>
             <button
               onClick={() => logout()}
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/5 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
             >
               Logout
             </button>

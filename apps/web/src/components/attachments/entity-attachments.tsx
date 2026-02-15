@@ -135,7 +135,7 @@ export function EntityAttachments({
         <h3 className="text-sm font-semibold text-gray-900">Attachments</h3>
         <button
           onClick={() => setUploadModalOpen(true)}
-          className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          className="rounded-md bg-accent-1 px-3 py-1.5 text-sm font-medium text-white hover:brightness-90"
         >
           Upload
         </button>
@@ -160,7 +160,7 @@ export function EntityAttachments({
               <div className="ml-2 flex gap-2">
                 <button
                   onClick={() => handleDownloadClick(a.id, a.fileName)}
-                  className="text-blue-600 hover:underline"
+                  className="text-accent-1 hover:underline"
                 >
                   Download
                 </button>

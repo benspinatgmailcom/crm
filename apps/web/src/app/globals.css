@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* RGB channels for Tailwind opacity modifiers (default: #2563eb, #7c3aed) */
+  --accent-1: 37 99 235;
+  --accent-2: 124 58 237;
+}
+
+/* Subtle neon glow on logo hover (accent colors, soft, no layout shift) */
+.group:hover .logo-glow-hover {
+  filter: drop-shadow(0 0 6px rgba(var(--accent-1), 0.5)) drop-shadow(0 0 12px rgba(var(--accent-2), 0.2));
+}

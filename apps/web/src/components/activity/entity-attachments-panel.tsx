@@ -174,7 +174,7 @@ export function EntityAttachmentsPanel({
                     <button
                       type="button"
                       onClick={() => handleDownload(pathVal, filename)}
-                      className="text-blue-600 hover:underline text-xs"
+                      className="text-accent-1 hover:underline text-xs"
                     >
                       Download
                     </button>

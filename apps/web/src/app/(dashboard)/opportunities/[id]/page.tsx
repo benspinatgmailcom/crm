@@ -183,7 +183,7 @@ export default function OpportunityDetailPage() {
   if (loading && !opportunity) {
     return (
       <div>
-        <Link href="/opportunities" className="text-sm text-blue-600 hover:underline">
+        <Link href="/opportunities" className="text-sm text-accent-1 hover:underline">
           ← Back to Opportunities
         </Link>
         <p className="mt-4 text-gray-500">Loading...</p>
@@ -194,7 +194,7 @@ export default function OpportunityDetailPage() {
   if (error || !opportunity) {
     return (
       <div>
-        <Link href="/opportunities" className="text-sm text-blue-600 hover:underline">
+        <Link href="/opportunities" className="text-sm text-accent-1 hover:underline">
           ← Back to Opportunities
         </Link>
         <p className="mt-4 text-red-600">{error || "Opportunity not found"}</p>
@@ -205,7 +205,7 @@ export default function OpportunityDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/opportunities" className="text-sm text-blue-600 hover:underline">
+        <Link href="/opportunities" className="text-sm text-accent-1 hover:underline">
           ← Back to Opportunities
         </Link>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -261,7 +261,7 @@ export default function OpportunityDetailPage() {
                 <div>
                   <dt className="text-gray-500">Created from Lead</dt>
                   <dd className="text-gray-900">
-                    <Link href={`/leads/${opportunity.sourceLeadId}`} className="text-blue-600 hover:underline">
+                    <Link href={`/leads/${opportunity.sourceLeadId}`} className="text-accent-1 hover:underline">
                       View lead
                     </Link>
                   </dd>
@@ -275,7 +275,7 @@ export default function OpportunityDetailPage() {
               <h2 className="mb-3 text-sm font-semibold text-gray-900">Related Account</h2>
               <Link
                 href={`/accounts/${account.id}`}
-                className="text-blue-600 hover:underline"
+                className="text-accent-1 hover:underline"
               >
                 {account.name}
               </Link>
@@ -287,14 +287,14 @@ export default function OpportunityDetailPage() {
                   href={account.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-1 block text-sm text-blue-600 hover:underline"
+                  className="mt-1 block text-sm text-accent-1 hover:underline"
                 >
                   {account.website}
                 </a>
               )}
               <Link
                 href={`/accounts/${account.id}`}
-                className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                className="mt-2 inline-block text-sm text-accent-1 hover:underline"
               >
                 View full account →
               </Link>
@@ -307,7 +307,7 @@ export default function OpportunityDetailPage() {
                 <h2 className="text-sm font-semibold text-gray-900">Key Contacts</h2>
                 <Link
                   href={`/accounts/${account.id}`}
-                  className="text-sm text-blue-600 hover:underline"
+                  className="text-sm text-accent-1 hover:underline"
                 >
                   View all on account
                 </Link>
@@ -452,7 +452,7 @@ export default function OpportunityDetailPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
             >
               {submitting ? "Saving..." : "Save"}
             </button>

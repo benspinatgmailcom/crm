@@ -290,7 +290,7 @@ export default function AccountDetailPage() {
   if (loading && !account) {
     return (
       <div>
-        <Link href="/accounts" className="text-sm text-blue-600 hover:underline">← Back to Accounts</Link>
+        <Link href="/accounts" className="text-sm text-accent-1 hover:underline">← Back to Accounts</Link>
         <p className="mt-4 text-gray-500">Loading...</p>
       </div>
     );
@@ -299,7 +299,7 @@ export default function AccountDetailPage() {
   if (error || !account) {
     return (
       <div>
-        <Link href="/accounts" className="text-sm text-blue-600 hover:underline">← Back to Accounts</Link>
+        <Link href="/accounts" className="text-sm text-accent-1 hover:underline">← Back to Accounts</Link>
         <p className="mt-4 text-red-600">{error || "Account not found"}</p>
       </div>
     );
@@ -308,7 +308,7 @@ export default function AccountDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/accounts" className="text-sm text-blue-600 hover:underline">← Back to Accounts</Link>
+        <Link href="/accounts" className="text-sm text-accent-1 hover:underline">← Back to Accounts</Link>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-semibold text-gray-900">{account.name}</h1>
           <div className="flex flex-wrap gap-2">
@@ -351,7 +351,7 @@ export default function AccountDetailPage() {
                 <dt className="text-gray-500">Website</dt>
                 <dd className="text-gray-900">
                   {account.website ? (
-                    <a href={account.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{account.website}</a>
+                    <a href={account.website} target="_blank" rel="noopener noreferrer" className="text-accent-1 hover:underline">{account.website}</a>
                   ) : (
                     "—"
                   )}
@@ -361,7 +361,7 @@ export default function AccountDetailPage() {
                 <div>
                   <dt className="text-gray-500">Created from Lead</dt>
                   <dd className="text-gray-900">
-                    <Link href={`/leads/${account.sourceLeadId}`} className="text-blue-600 hover:underline">
+                    <Link href={`/leads/${account.sourceLeadId}`} className="text-accent-1 hover:underline">
                       View lead
                     </Link>
                   </dd>
@@ -373,7 +373,7 @@ export default function AccountDetailPage() {
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-gray-900">Related Contacts</h2>
-              <button onClick={openAddContact} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              <button onClick={openAddContact} className="rounded-md bg-accent-1 px-3 py-1.5 text-sm font-medium text-white hover:brightness-90">
                 Add
               </button>
             </div>
@@ -395,13 +395,13 @@ export default function AccountDetailPage() {
                     contacts.map((c) => (
                       <tr key={c.id}>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                          <Link href={`/contacts/${c.id}`} className="text-blue-600 hover:underline">
+                          <Link href={`/contacts/${c.id}`} className="text-accent-1 hover:underline">
                             {c.firstName} {c.lastName}
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{c.email}</td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => openEditContact(c)} className="text-sm text-blue-600 hover:underline mr-2">Edit</button>
+                          <button onClick={() => openEditContact(c)} className="text-sm text-accent-1 hover:underline mr-2">Edit</button>
                           <button onClick={() => setContactDeleteId(c.id)} className="text-sm text-red-600 hover:underline">Delete</button>
                         </td>
                       </tr>
@@ -415,7 +415,7 @@ export default function AccountDetailPage() {
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-gray-900">Related Opportunities</h2>
-              <button onClick={openAddOpp} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+              <button onClick={openAddOpp} className="rounded-md bg-accent-1 px-3 py-1.5 text-sm font-medium text-white hover:brightness-90">
                 Add
               </button>
             </div>
@@ -438,14 +438,14 @@ export default function AccountDetailPage() {
                     opportunities.map((o) => (
                       <tr key={o.id}>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                          <Link href={`/opportunities/${o.id}`} className="text-blue-600 hover:underline">
+                          <Link href={`/opportunities/${o.id}`} className="text-accent-1 hover:underline">
                             {o.name}
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{formatAmount(o.amount)}</td>
                         <td className="px-4 py-3 text-sm text-gray-500">{o.stage ?? "—"}</td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => openEditOpp(o)} className="text-sm text-blue-600 hover:underline mr-2">Edit</button>
+                          <button onClick={() => openEditOpp(o)} className="text-sm text-accent-1 hover:underline mr-2">Edit</button>
                           <button onClick={() => setOppDeleteId(o.id)} className="text-sm text-red-600 hover:underline">Delete</button>
                         </td>
                       </tr>
@@ -505,7 +505,7 @@ export default function AccountDetailPage() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setEditAccountOpen(false)} className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={accountSubmitting} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{accountSubmitting ? "Saving..." : "Save"}</button>
+            <button type="submit" disabled={accountSubmitting} className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50">{accountSubmitting ? "Saving..." : "Save"}</button>
           </div>
         </form>
       </Modal>
@@ -535,7 +535,7 @@ export default function AccountDetailPage() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setContactModalOpen(false)} className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={contactSubmitting} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{contactSubmitting ? "Saving..." : "Save"}</button>
+            <button type="submit" disabled={contactSubmitting} className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50">{contactSubmitting ? "Saving..." : "Save"}</button>
           </div>
         </form>
       </Modal>
@@ -569,7 +569,7 @@ export default function AccountDetailPage() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={() => setOppModalOpen(false)} className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-            <button type="submit" disabled={oppSubmitting} className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{oppSubmitting ? "Saving..." : "Save"}</button>
+            <button type="submit" disabled={oppSubmitting} className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50">{oppSubmitting ? "Saving..." : "Save"}</button>
           </div>
         </form>
       </Modal>
