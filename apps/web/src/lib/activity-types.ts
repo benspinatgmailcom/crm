@@ -19,6 +19,7 @@ export const ALL_ACTIVITY_TYPES = [
   "ai_recommendation",
   "file_uploaded",
   "file_deleted",
+  "stage_change",
 ] as const;
 export type ActivityType = (typeof ALL_ACTIVITY_TYPES)[number];
 
@@ -32,4 +33,5 @@ export const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   ai_recommendation: "AI Recommendation",
   file_uploaded: "File Uploaded",
   file_deleted: "File Deleted",
+  stage_change: "Stage Change",
 };

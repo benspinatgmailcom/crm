@@ -154,6 +154,31 @@ function ActivityItem({
             Deleted: {String(p.fileName ?? "file")}
           </p>
         );
+      case "stage_change": {
+        const fromStage = String(p.fromStage ?? "—");
+        const toStage = String(p.toStage ?? "—");
+        const reason = p.reason ? String(p.reason) : null;
+        const competitor = p.competitor ? String(p.competitor) : null;
+        const notes = p.notes ? String(p.notes) : null;
+        return (
+          <div className="space-y-1 text-sm">
+            <p className="text-gray-700">
+              Moved from <span className="font-medium">{fromStage}</span> →{" "}
+              <span className="font-medium">{toStage}</span>
+            </p>
+            {(reason || competitor) && (
+              <p className="text-gray-600 text-xs">
+                {reason}
+                {reason && competitor ? " · " : ""}
+                {competitor ? `Competitor: ${competitor}` : ""}
+              </p>
+            )}
+            {notes && (
+              <p className="text-gray-600 line-clamp-2">{notes}</p>
+            )}
+          </div>
+        );
+      }
       default:
         return <p className="text-sm text-gray-500">{type}</p>;
     }

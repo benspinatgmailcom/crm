@@ -44,6 +44,13 @@ function fakeFile(
   };
 }
 
+/** Add days to a date; returns new Date. Safe for positive or negative days. */
+function addDays(base: Date, days: number): Date {
+  const d = new Date(base.getTime());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
 /** Deterministic pseudo-random (seeded) for filler data */
 function seededRandom(seed: number): () => number {
   return () => {
@@ -159,9 +166,9 @@ export class SeedStoryService {
     ], reset, (n) => { contactsCreated += n; });
 
     const apexOpps = await this.ensureOpportunities(apexId, [
-      { name: 'Apex Renewal FY26', stage: 'Negotiation', amount: 1_200_000, closeDaysOut: 21 },
-      { name: 'Edge Expansion Phase 1', stage: 'Proposal', amount: 450_000, closeDaysOut: 45 },
-      { name: 'Disaster Recovery Add-on', stage: 'Qualification', amount: 180_000, closeDaysOut: 60 },
+      { name: 'Apex Renewal FY26', stage: 'negotiation', amount: 1_200_000, closeDaysOut: 21 },
+      { name: 'Edge Expansion Phase 1', stage: 'proposal', amount: 450_000, closeDaysOut: 45 },
+      { name: 'Disaster Recovery Add-on', stage: 'qualification', amount: 180_000, closeDaysOut: 60 },
     ], reset, (n) => { opportunitiesCreated += n; });
 
     await this.seedApexActivities(apexId, apexContacts, apexOpps, reset, (n) => { activitiesCreated += n; });
@@ -192,8 +199,8 @@ export class SeedStoryService {
     ], reset, (n) => { contactsCreated += n; });
 
     await this.ensureOpportunities(northwindId, [
-      { name: 'Core Network Modernization', stage: 'Proposal', amount: 650_000, closeDaysOut: 30 },
-      { name: 'Long-haul Fiber Connectivity', stage: 'Qualification', amount: 300_000, closeDaysOut: 75 },
+      { name: 'Core Network Modernization', stage: 'proposal', amount: 650_000, closeDaysOut: 30 },
+      { name: 'Long-haul Fiber Connectivity', stage: 'qualification', amount: 300_000, closeDaysOut: 75 },
     ], reset, (n) => { opportunitiesCreated += n; });
 
     await this.seedNorthwindActivities(northwindId, northwindContacts, reset, (n) => { activitiesCreated += n; });
@@ -223,7 +230,7 @@ export class SeedStoryService {
     ], reset, (n) => { contactsCreated += n; });
 
     await this.ensureOpportunities(globexId, [
-      { name: 'ERP Integration Modernization', stage: 'Qualification', amount: 250_000, closeDaysOut: 90 },
+      { name: 'ERP Integration Modernization', stage: 'qualification', amount: 250_000, closeDaysOut: 90 },
     ], reset, (n) => { opportunitiesCreated += n; });
 
     await this.seedGlobexActivities(globexId, globexContacts, reset, (n) => { activitiesCreated += n; });
@@ -287,10 +294,9 @@ export class SeedStoryService {
     let existing = await this.prisma.opportunity.findMany({ where: { accountId } });
     if (reset || existing.length === 0) {
       if (existing.length) await this.prisma.opportunity.deleteMany({ where: { accountId } });
-      const closeBase = new Date();
+      const today = new Date();
       for (const o of spec) {
-        const closeDate = new Date(closeBase);
-        closeDate.setDate(closeDate.getDate() + o.closeDaysOut);
+        const closeDate = addDays(today, o.closeDaysOut);
         await this.prisma.opportunity.create({
           data: {
             accountId,
@@ -538,15 +544,26 @@ export class SeedStoryService {
         contactsCreated++;
       }
 
-      const numOpps = Math.floor(rand() * 3);
+      const fillerStages: Array<{ stage: string; daysMin: number; daysMax: number }> = [
+        { stage: 'qualification', daysMin: 60, daysMax: 120 },
+        { stage: 'discovery', daysMin: 60, daysMax: 120 },
+        { stage: 'proposal', daysMin: 30, daysMax: 75 },
+        { stage: 'negotiation', daysMin: 7, daysMax: 30 },
+        { stage: 'closed-won', daysMin: -60, daysMax: -1 },
+        { stage: 'closed-lost', daysMin: -60, daysMax: -1 },
+      ];
+      const numOpps = Math.max(1, Math.floor(rand() * 3));
+      const today = new Date();
       for (let o = 0; o < numOpps; o++) {
-        const closeDate = new Date();
-        closeDate.setDate(closeDate.getDate() + 30 + Math.floor(rand() * 60));
+        const stageSpec = fillerStages[Math.floor(rand() * fillerStages.length)];
+        const range = stageSpec.daysMax - stageSpec.daysMin + 1;
+        const days = stageSpec.daysMin + Math.floor(rand() * range);
+        const closeDate = addDays(today, days);
         await this.prisma.opportunity.create({
           data: {
             accountId: account.id,
             name: `Opportunity ${o + 1}`,
-            stage: 'Qualification',
+            stage: stageSpec.stage,
             amount: 50000 + Math.floor(rand() * 100000),
             closeDate,
           },

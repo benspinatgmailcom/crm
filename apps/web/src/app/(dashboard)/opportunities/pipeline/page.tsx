@@ -15,6 +15,7 @@ import {
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
+import { Modal } from "@/components/ui/modal";
 
 interface PipelineOpportunity {
   id: string;
@@ -78,6 +79,15 @@ function formatCurrency(n: number): string {
     style: "currency",
     currency: "USD",
   }).format(n);
+}
+
+function formatCloseDate(closeDate: string | null): string {
+  if (!closeDate) return "—";
+  return new Date(closeDate).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 type CloseFilter = "all" | "30" | "60" | "90" | "qtr";
@@ -153,41 +163,168 @@ function applyFilters(
   return result;
 }
 
-// Draggable card – uses useDraggable; when canDrag=false, card is still rendered but not draggable
 function DraggableCard({
   opp,
   canDrag,
+  onUpdate,
+  showToast,
 }: {
   opp: PipelineOpportunity;
   canDrag: boolean;
+  onUpdate: (oppId: string, updates: { amount?: number | { toString(): string } | null; closeDate?: string | null }) => void;
+  showToast: (msg: string) => void;
 }) {
   const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editAmount, setEditAmount] = useState("");
+  const [editCloseDate, setEditCloseDate] = useState("");
+  const escPressedRef = { current: false };
+
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: opp.id,
     data: { opp, stage: opp.stage },
-    disabled: !canDrag,
+    disabled: !canDrag || editing,
   });
 
-  const cardContent = (
-    <>
-      <div className="text-sm font-medium text-gray-900">{opp.name}</div>
-      <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
-      <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
-        <span>{formatAmount(opp.amount)}</span>
-        <span>
-          {opp.closeDate ? new Date(opp.closeDate).toLocaleDateString() : "—"}
-        </span>
-      </div>
-    </>
+  const startEdit = useCallback(() => {
+    setEditing(true);
+    setEditAmount(opp.amount != null ? String(Math.round(toNumber(opp.amount))) : "");
+    setEditCloseDate(opp.closeDate ? opp.closeDate.slice(0, 10) : "");
+  }, [opp.amount, opp.closeDate]);
+
+  const cancelEdit = useCallback(() => {
+    escPressedRef.current = false;
+    setEditing(false);
+    setSaving(false);
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (saving) return;
+    const amountVal = editAmount.trim() === "" ? null : Math.round(Number(editAmount)) || 0;
+    const closeVal = editCloseDate.trim() === "" ? null : editCloseDate;
+    const amountChanged = (opp.amount == null ? null : toNumber(opp.amount)) !== (amountVal ?? 0);
+    const dateChanged =
+      (opp.closeDate ?? null) !== (closeVal ?? null);
+    if (!amountChanged && !dateChanged) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    const prevAmount = opp.amount;
+    const prevCloseDate = opp.closeDate;
+    onUpdate(opp.id, { amount: amountVal, closeDate: closeVal });
+    try {
+      await apiFetch(`/opportunities/${opp.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          amount: amountVal,
+          closeDate: closeVal ?? undefined,
+        }),
+      });
+      setEditing(false);
+    } catch {
+      onUpdate(opp.id, { amount: prevAmount, closeDate: prevCloseDate });
+      showToast("Failed to save changes.");
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    opp.id,
+    opp.amount,
+    opp.closeDate,
+    editAmount,
+    editCloseDate,
+    saving,
+    onUpdate,
+    showToast,
+  ]);
+
+  const handleBlur = useCallback(() => {
+    if (escPressedRef.current) {
+      escPressedRef.current = false;
+      cancelEdit();
+      return;
+    }
+    saveEdit();
+  }, [saveEdit, cancelEdit]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        escPressedRef.current = true;
+        cancelEdit();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        saveEdit();
+      }
+    },
+    [cancelEdit, saveEdit]
+  );
+
+  const handleCardClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (editing) return;
+      if ((e.target as HTMLElement).closest("[data-edit-trigger]")) return;
+      router.push(`/opportunities/${opp.id}`);
+    },
+    [editing, opp.id, router]
   );
 
   if (!canDrag) {
     return (
       <div
-        onClick={() => router.push(`/opportunities/${opp.id}`)}
-        className="cursor-pointer rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-accent-1/30"
+        onClick={handleCardClick}
+        className="group relative cursor-pointer rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-accent-1/30"
       >
-        {cardContent}
+        <div className="text-sm font-medium text-gray-900">{opp.name}</div>
+        <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
+        <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
+          <span>{formatAmount(opp.amount)}</span>
+          <span>{formatCloseDate(opp.closeDate)}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (editing) {
+    return (
+      <div
+        className="rounded-lg border-2 border-accent-1/50 bg-white p-3 shadow-sm"
+        onKeyDown={handleKeyDown}
+      >
+        <div className="text-sm font-medium text-gray-900">{opp.name}</div>
+        <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
+        <div className="mt-2 space-y-2">
+          <div>
+            <label className="sr-only">Amount</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              disabled={saving}
+              value={editAmount}
+              onChange={(e) => setEditAmount(e.target.value)}
+              onBlur={handleBlur}
+              placeholder="Amount"
+              className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="sr-only">Close date</label>
+            <input
+              type="date"
+              disabled={saving}
+              value={editCloseDate}
+              onChange={(e) => setEditCloseDate(e.target.value)}
+              onBlur={handleBlur}
+              className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+            />
+          </div>
+          {saving && (
+            <p className="text-xs text-gray-500">Saving…</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -197,13 +334,248 @@ function DraggableCard({
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      onClick={() => router.push(`/opportunities/${opp.id}`)}
-      className={`cursor-grab active:cursor-grabbing rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-accent-1/30 ${
+      onClick={handleCardClick}
+      className={`group relative cursor-grab active:cursor-grabbing rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-accent-1/30 ${
         isDragging ? "opacity-50 shadow-lg" : ""
       }`}
     >
-      {cardContent}
+      <div className="text-sm font-medium text-gray-900">{opp.name}</div>
+      <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
+      <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
+        <span>{formatAmount(opp.amount)}</span>
+        <span>{formatCloseDate(opp.closeDate)}</span>
+      </div>
+      <button
+        type="button"
+        data-edit-trigger
+        onClick={(e) => {
+          e.stopPropagation();
+          startEdit();
+        }}
+        className="absolute right-2 top-2 rounded p-1 opacity-0 transition-opacity hover:bg-gray-100 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-accent-1"
+        aria-label="Edit"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-3.5 w-3.5 text-gray-500"
+        >
+          <path d="m2.695 14.762-1.262 3.155a.5.5 0 0 0 .65.65l3.155-1.263a1 1 0 0 0 .469-.263l5.767-5.768a.25.25 0 0 0-.354-.354L6.177 14.23a1 1 0 0 0-.262.469Z" />
+          <path d="m17.316 3.784-1.1-1.1a2.5 2.5 0 0 0-3.536 0l-1.1 1.1a2.5 2.5 0 0 0 0 3.536l1.1 1.1a2.5 2.5 0 0 0 3.536 0l1.1-1.1a2.5 2.5 0 0 0 0-3.536Z" />
+        </svg>
+      </button>
     </div>
+  );
+}
+
+const WON_REASONS = ["Price", "Features", "Relationship", "Timeline", "Support", "Other"] as const;
+const LOSS_REASONS = ["No budget", "Lost to competitor", "No decision", "Timing", "Missing feature", "Other"] as const;
+
+function StageChangeModal({
+  pending,
+  onConfirm,
+  onCancel,
+  showToast,
+}: {
+  pending: { opp: PipelineOpportunity; fromStage: string; toStage: "closed-won" | "closed-lost" };
+  onConfirm: (payload: {
+    notes: string;
+    reason?: string;
+    competitor?: string;
+    nextSteps?: string;
+    finalAmount?: number | null;
+  }) => Promise<void>;
+  onCancel: () => void;
+  showToast: (msg: string) => void;
+}) {
+  const isWon = pending.toStage === "closed-won";
+  const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState("");
+  const [competitor, setCompetitor] = useState("");
+  const [nextSteps, setNextSteps] = useState("");
+  const [finalAmount, setFinalAmount] = useState<string>(
+    pending.opp.amount != null ? String(Math.round(toNumber(pending.opp.amount))) : ""
+  );
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleConfirm = async () => {
+    setSubmitError(null);
+    if (isWon && !notes.trim()) {
+      setSubmitError("Notes are required.");
+      return;
+    }
+    if (!isWon && !reason) {
+      setSubmitError("Loss reason is required.");
+      return;
+    }
+    if (!isWon && !notes.trim()) {
+      setSubmitError("Notes are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onConfirm({
+        notes: notes.trim(),
+        reason: reason || undefined,
+        competitor: competitor.trim() || undefined,
+        nextSteps: nextSteps.trim() || undefined,
+        finalAmount:
+          finalAmount.trim() === "" ? undefined : Math.round(Number(finalAmount)) || null,
+      });
+      onCancel();
+    } catch (err: unknown) {
+      const e = err as { body?: { message?: string }; message?: string };
+      showToast(e.body?.message ?? e.message ?? "Failed to save.");
+      setSubmitError(e.body?.message ?? e.message ?? "Failed to save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen
+      onClose={onCancel}
+      title={isWon ? "Close as Won" : "Close as Lost"}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleConfirm();
+        }}
+        className="space-y-4"
+      >
+        {submitError && (
+          <p className="text-sm text-red-600">{submitError}</p>
+        )}
+        <p className="text-sm text-gray-600">
+          <strong>{pending.opp.name}</strong> — {pending.opp.accountName}
+        </p>
+
+        {isWon ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Notes *</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="What clinched the deal?"
+                rows={3}
+                required
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Won reason</label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              >
+                <option value="">Select…</option>
+                {WON_REASONS.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Competitor</label>
+              <input
+                type="text"
+                value={competitor}
+                onChange={(e) => setCompetitor(e.target.value)}
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Final Amount</label>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={finalAmount}
+                onChange={(e) => setFinalAmount(e.target.value)}
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Loss reason *</label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                required
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              >
+                <option value="">Select…</option>
+                {LOSS_REASONS.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Notes *</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="What happened?"
+                rows={3}
+                required
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Competitor</label>
+              <input
+                type="text"
+                value={competitor}
+                onChange={(e) => setCompetitor(e.target.value)}
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Next steps</label>
+              <textarea
+                value={nextSteps}
+                onChange={(e) => setNextSteps(e.target.value)}
+                rows={2}
+                disabled={saving}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1 disabled:bg-gray-100"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving}
+            className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Confirm"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -212,11 +584,15 @@ function DroppableColumn({
   opportunities,
   stageTotal,
   canEdit,
+  onUpdate,
+  showToast,
 }: {
   stageId: string;
   opportunities: PipelineOpportunity[];
   stageTotal: number;
   canEdit: boolean;
+  onUpdate: (oppId: string, updates: { amount?: number | { toString(): string } | null; closeDate?: string | null }) => void;
+  showToast: (msg: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stageId,
@@ -245,7 +621,13 @@ function DroppableColumn({
       </div>
       <div className="flex flex-1 flex-col gap-2">
         {opportunities.map((opp) => (
-          <DraggableCard key={opp.id} opp={opp} canDrag={canEdit} />
+          <DraggableCard
+            key={opp.id}
+            opp={opp}
+            canDrag={canEdit}
+            onUpdate={onUpdate}
+            showToast={showToast}
+          />
         ))}
       </div>
     </div>
@@ -381,8 +763,113 @@ export default function PipelinePage() {
     })
   );
 
+  const moveOpportunityToStage = useCallback(
+    (
+      oppId: string,
+      newStage: string,
+      updates?: { amount?: number | null; closeDate?: string | null }
+    ) => {
+      setData((prev) => {
+        if (!prev) return prev;
+        const next = JSON.parse(JSON.stringify(prev)) as PipelineData;
+        let moved: PipelineOpportunity | undefined;
+        for (const stageId of Object.keys(next)) {
+          const idx = next[stageId].findIndex((o) => o.id === oppId);
+          if (idx >= 0) {
+            moved = next[stageId].splice(idx, 1)[0];
+            break;
+          }
+        }
+        if (moved) {
+          if (updates?.amount !== undefined) moved.amount = updates.amount;
+          if (updates?.closeDate !== undefined) moved.closeDate = updates.closeDate;
+          moved.stage = newStage;
+          next[newStage] = [...(next[newStage] ?? []), moved];
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const updateOpportunity = useCallback(
+    (oppId: string, updates: { amount?: number | { toString(): string } | null; closeDate?: string | null }) => {
+      setData((prev) => {
+        if (!prev) return prev;
+        const next = JSON.parse(JSON.stringify(prev)) as PipelineData;
+        for (const stageId of Object.keys(next)) {
+          const idx = next[stageId].findIndex((o) => o.id === oppId);
+          if (idx >= 0) {
+            const o = next[stageId][idx];
+            if (updates.amount !== undefined) o.amount = updates.amount;
+            if (updates.closeDate !== undefined) o.closeDate = updates.closeDate;
+            break;
+          }
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const [pendingStageChange, setPendingStageChange] = useState<{
+    opp: PipelineOpportunity;
+    fromStage: string;
+    toStage: "closed-won" | "closed-lost";
+  } | null>(null);
+
+  const handleStageChangeConfirm = useCallback(
+    async (payload: {
+      notes: string;
+      reason?: string;
+      competitor?: string;
+      nextSteps?: string;
+      finalAmount?: number | null;
+    }) => {
+      if (!pendingStageChange) return;
+      const { opp, fromStage, toStage } = pendingStageChange;
+      const today = new Date().toISOString().slice(0, 10);
+      const patchPayload: Record<string, unknown> = {
+        stage: toStage,
+        closeDate: opp.closeDate ? undefined : today,
+      };
+      if (payload.finalAmount !== undefined) {
+        patchPayload.amount = payload.finalAmount;
+      }
+      await apiFetch(`/opportunities/${opp.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patchPayload),
+      });
+      await apiFetch("/activities", {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "opportunity",
+          entityId: opp.id,
+          type: "stage_change",
+          payload: {
+            fromStage,
+            toStage,
+            reason: payload.reason,
+            notes: payload.notes,
+            competitor: payload.competitor,
+            nextSteps: payload.nextSteps,
+            finalAmount: payload.finalAmount,
+          },
+        }),
+      });
+      const updates: { amount?: number | null; closeDate?: string | null } = {};
+      if (payload.finalAmount !== undefined) updates.amount = payload.finalAmount;
+      if (!opp.closeDate) updates.closeDate = today;
+      moveOpportunityToStage(opp.id, toStage, Object.keys(updates).length ? updates : undefined);
+      if (!filters.includeClosed) {
+        showToast("Opportunity moved but is hidden by current filters.");
+      }
+    },
+    [pendingStageChange, filters.includeClosed, showToast, moveOpportunityToStage]
+  );
+
   const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
+    (event: DragEndEvent) => {
       const { active, over } = event;
       if (!over || !data || !canEdit) return;
       const oppId = String(active.id);
@@ -397,11 +884,15 @@ export default function PipelinePage() {
           : "_other";
       if (normalizedOld === newStage) return;
 
-      const movedToClosed =
-        (newStage === "closed-won" || newStage === "closed-lost") &&
-        !filters.includeClosed;
+      if (newStage === "closed-won" || newStage === "closed-lost") {
+        setPendingStageChange({
+          opp: opp!,
+          fromStage: normalizedOld,
+          toStage: newStage as "closed-won" | "closed-lost",
+        });
+        return;
+      }
 
-      // Optimistic update
       const prev = JSON.parse(JSON.stringify(data)) as PipelineData;
       for (const stage of Object.keys(prev)) {
         prev[stage] = prev[stage].filter((o) => o.id !== oppId);
@@ -412,20 +903,15 @@ export default function PipelinePage() {
       }
       setData(prev);
 
-      if (movedToClosed) {
-        showToast("Opportunity moved but is hidden by current filters.");
-      }
-
-      try {
-        await apiFetch(`/opportunities/${oppId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ stage: newStage === "_other" ? "prospecting" : newStage }),
-        });
-      } catch {
+      apiFetch(`/opportunities/${oppId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ stage: newStage === "_other" ? "prospecting" : newStage }),
+      }).catch(() => {
         setData(data);
-      }
+        showToast("Failed to update stage.");
+      });
     },
-    [data, canEdit, filters.includeClosed, showToast]
+    [data, canEdit, showToast]
   );
 
   const viewToggle = (
@@ -570,6 +1056,15 @@ export default function PipelinePage() {
         </div>
       )}
 
+      {pendingStageChange && (
+        <StageChangeModal
+          pending={pendingStageChange}
+          onConfirm={handleStageChangeConfirm}
+          onCancel={() => setPendingStageChange(null)}
+          showToast={showToast}
+        />
+      )}
+
       {(() => {
         const allOpps = Object.values(filteredData ?? {}).flat();
         const pipelineTotal = allOpps
@@ -623,6 +1118,8 @@ export default function PipelinePage() {
                       opportunities={opps}
                       stageTotal={stTotal}
                       canEdit={canEdit}
+                      onUpdate={updateOpportunity}
+                      showToast={showToast}
                     />
                   );
                 })}
