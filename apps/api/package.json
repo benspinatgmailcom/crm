@@ -34,7 +34,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^3.23.8",
-    "prisma": "^6.x"
+    "prisma": "^6.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
