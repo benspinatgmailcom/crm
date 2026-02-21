@@ -7,9 +7,13 @@
     "dev": "nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema=../../packages/db/prisma/schema.prisma",
+    "start:prod:migrate": "pnpm run prisma:migrate:deploy && pnpm run start:prod"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.995.0",
+    "@aws-sdk/s3-request-presigner": "^3.995.0",
     "@crm/db": "workspace:*",
     "@crm/shared": "workspace:*",
     "@nestjs/common": "^10.4.15",
@@ -28,7 +32,8 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",

@@ -6,6 +6,7 @@ import { Role } from '../auth/constants';
 import { DevService } from './dev.service';
 import { SeedStoryService, type SeedStoryResult } from './seed-story.service';
 import { SeedStoryDto } from './dto/seed-story.dto';
+import { env } from '../config/env';
 
 @ApiTags('Dev')
 @Controller('dev')
@@ -21,7 +22,7 @@ export class DevController {
   @ApiResponse({ status: 201, description: 'Seed completed' })
   @ApiResponse({ status: 403, description: 'Not available in production' })
   async seed(): Promise<{ message: string; counts: Record<string, number> }> {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       throw new ForbiddenException('Seed endpoint is disabled in production');
     }
     return this.devService.seed();

@@ -5,9 +5,6 @@ import { Modal } from "@/components/ui/modal";
 import { apiUpload } from "@/lib/api-client";
 import type { ActivityEntityType } from "@/components/activity/entity-activity-timeline";
 
-const getBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-
 interface QuickCreateAttachmentModalProps {
   isOpen: boolean;
   onClose: () => void;

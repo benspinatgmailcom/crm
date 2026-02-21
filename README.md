@@ -60,9 +60,11 @@ pnpm dev:web   # Web at http://localhost:3000
 
 ```bash
 pnpm db:push    # Push schema (dev)
-pnpm db:migrate # Create migration
+pnpm db:migrate # Apply migrations (dev; creates new ones if schema changed)
 pnpm db:studio  # Prisma Studio UI
 ```
+
+**Production:** apply migrations with `prisma migrate deploy` (e.g. in CI or release pipeline). See [docs/database-migrations.md](docs/database-migrations.md).
 
 ### Authentication
 

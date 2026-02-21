@@ -7,6 +7,7 @@ import { ActivityService } from '../activity/activity.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { UPLOADS_DIR } from '../attachments/uploads.constants';
 import type { SeedStoryDto } from './dto/seed-story.dto';
+import { env } from '../config/env';
 
 const STORY_ACCOUNT_NAMES = {
   APEX: 'Apex Data Centers',
@@ -115,7 +116,7 @@ export class SeedStoryService {
   }
 
   async seedStory(dto: SeedStoryDto): Promise<SeedStoryResult> {
-    if (process.env.NODE_ENV === 'production') {
+    if (env.NODE_ENV === 'production') {
       throw new ForbiddenException('Story seed is disabled in production');
     }
 

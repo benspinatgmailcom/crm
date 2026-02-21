@@ -9,10 +9,9 @@ import { isAdmin } from "@/lib/roles";
 import { ApiStatus } from "@/components/api-status";
 import { GlobalSearch } from "@/components/global-search";
 import { QuickCreateDropdown } from "@/components/quick-create-dropdown";
+import { env } from "@/lib/env";
 
-const logoUrl = typeof process.env.NEXT_PUBLIC_LOGO_URL === "string" && process.env.NEXT_PUBLIC_LOGO_URL.trim()
-  ? process.env.NEXT_PUBLIC_LOGO_URL.trim()
-  : null;
+const logoUrl = env.NEXT_PUBLIC_LOGO_URL || null;
 
 const navItems = [
   { href: "/accounts", label: "Accounts" },
