@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
 import { apiFetch } from "@/lib/api-client";
+import { env } from "@/lib/env";
 
-const logoUrl =
-  typeof process.env.NEXT_PUBLIC_LOGO_URL === "string" && process.env.NEXT_PUBLIC_LOGO_URL.trim()
-    ? process.env.NEXT_PUBLIC_LOGO_URL.trim()
-    : null;
+const logoUrl = env.NEXT_PUBLIC_LOGO_URL || null;
 
 export default function ChangePasswordPage() {
   const { user, isAuthenticated, isLoading, updateUser } = useAuth();

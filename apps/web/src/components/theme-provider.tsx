@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { env } from "@/lib/env";
 
 const DEFAULT_ACCENT_1 = "37 99 235";
 const DEFAULT_ACCENT_2 = "124 58 237";
@@ -23,12 +24,8 @@ function hexToRgbChannels(hex: string): string | null {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    const raw1 = typeof process.env.NEXT_PUBLIC_ACCENT_1 === "string" && process.env.NEXT_PUBLIC_ACCENT_1.trim()
-      ? process.env.NEXT_PUBLIC_ACCENT_1.trim()
-      : "";
-    const raw2 = typeof process.env.NEXT_PUBLIC_ACCENT_2 === "string" && process.env.NEXT_PUBLIC_ACCENT_2.trim()
-      ? process.env.NEXT_PUBLIC_ACCENT_2.trim()
-      : "";
+    const raw1 = env.NEXT_PUBLIC_ACCENT_1;
+    const raw2 = env.NEXT_PUBLIC_ACCENT_2;
     const accent1 = raw1.startsWith("#") ? (hexToRgbChannels(raw1) ?? DEFAULT_ACCENT_1) : (raw1 || DEFAULT_ACCENT_1);
     const accent2 = raw2.startsWith("#") ? (hexToRgbChannels(raw2) ?? DEFAULT_ACCENT_2) : (raw2 || DEFAULT_ACCENT_2);
     document.documentElement.style.setProperty("--accent-1", accent1);

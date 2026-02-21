@@ -1,15 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-const getBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { env } from "@/lib/env";
 
 export function ApiStatus({ className }: { className?: string }) {
   const [status, setStatus] = useState<"checking" | "ok" | "error">("checking");
 
   const check = () => {
-    fetch(`${getBaseUrl()}/health/db`, { credentials: "omit" })
+    fetch(`${env.NEXT_PUBLIC_API_URL}/health/db`, { credentials: "omit" })
       .then((r) => r.json())
       .then((data) => setStatus(data?.ok ? "ok" : "error"))
       .catch(() => setStatus("error"));

@@ -1,16 +1,11 @@
-import { config } from 'dotenv';
-import * as path from 'path';
-
-// Load env from packages/db for DATABASE_URL (dev)
-if (process.env.NODE_ENV !== 'production') {
-  config({ path: path.resolve(process.cwd(), '../../packages/db/.env') });
-  config(); // Override with apps/api/.env if present
-}
+// Validate env first so bootstrap fails with a readable error if config is invalid
+import './config/env';
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { env } from './config/env';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -34,7 +29,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swagger);
   SwaggerModule.setup('api', app, document);
 
-  const port = process.env.PORT ?? 3001;
+  const port = env.PORT;
   await app.listen(port);
   console.log(`API running at http://localhost:${port}`);
   console.log(`Swagger at http://localhost:${port}/api`);

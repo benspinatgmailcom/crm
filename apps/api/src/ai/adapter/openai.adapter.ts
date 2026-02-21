@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import { AiAdapter } from './ai-adapter.interface';
+import { env } from '../../config/env';
 
 @Injectable()
 export class OpenAiAdapter extends AiAdapter {
@@ -9,8 +10,8 @@ export class OpenAiAdapter extends AiAdapter {
 
   constructor() {
     super();
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
-    this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const apiKey = env.OPENAI_API_KEY?.trim();
+    this.model = env.OPENAI_MODEL;
     this.client = apiKey ? new OpenAI({ apiKey }) : null;
   }
 

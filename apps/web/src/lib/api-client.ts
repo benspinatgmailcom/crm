@@ -8,9 +8,9 @@ import {
   setTokens,
   clearTokens,
 } from "./auth-store";
+import { env } from "./env";
 
-const getBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const getBaseUrl = () => env.NEXT_PUBLIC_API_URL;
 
 export interface ApiError extends Error {
   status?: number;

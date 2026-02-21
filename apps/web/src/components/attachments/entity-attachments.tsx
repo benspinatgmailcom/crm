@@ -6,6 +6,7 @@ import { canWrite } from "@/lib/roles";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { env } from "@/lib/env";
 import type { ActivityEntityType } from "@/components/activity/activity-timeline";
 
 interface Attachment {
@@ -21,9 +22,6 @@ interface EntityAttachmentsProps {
   entityId: string;
   onUploadSuccess?: () => void;
 }
-
-const getBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -79,7 +77,7 @@ export function EntityAttachments({
     formData.append("file", file);
     try {
       const token = typeof window !== "undefined" ? (await import("@/lib/auth-store").then((m) => m.getAccessToken())) : null;
-      const res = await fetch(`${getBaseUrl()}/attachments`, {
+      const res = await fetch(`${env.NEXT_PUBLIC_API_URL}/attachments`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
@@ -102,7 +100,7 @@ export function EntityAttachments({
   const handleDownloadClick = async (id: string, fileName: string) => {
     const { getAccessToken } = await import("@/lib/auth-store");
     const token = getAccessToken();
-    const url = `${getBaseUrl()}/attachments/${id}/download`;
+    const url = `${env.NEXT_PUBLIC_API_URL}/attachments/${id}/download`;
     try {
       const res = await fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

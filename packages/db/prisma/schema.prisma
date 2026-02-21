@@ -78,6 +78,7 @@ model Opportunity {
   sourceLead Lead?   @relation("OpportunitySourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
 
   @@index([sourceLeadId])
+  @@index([stage, updatedAt, closeDate])
 }
 
 model Activity {
@@ -112,10 +113,11 @@ model Attachment {
   id                String    @id @default(uuid())
   entityType        String
   entityId          String
-  fileName          String
+  fileName          String    // original name
   mimeType          String
   size              Int
   storageKey        String
+  bucket            String?   // null = local storage
   uploadedByUserId  String
   extractedText     String?
   createdAt         DateTime  @default(now())

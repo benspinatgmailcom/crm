@@ -2,12 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProviderWrapper } from "@/components/auth-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { env } from "@/lib/env";
 
-const rawAccent1 =
-  typeof process.env.NEXT_PUBLIC_ACCENT_1 === "string" && process.env.NEXT_PUBLIC_ACCENT_1.trim()
-    ? process.env.NEXT_PUBLIC_ACCENT_1.trim()
-    : "";
-const themeColor = rawAccent1.startsWith("#") ? rawAccent1 : "#2563eb";
+const themeColor = env.NEXT_PUBLIC_ACCENT_1.startsWith("#") ? env.NEXT_PUBLIC_ACCENT_1 : "#2563eb";
 
 export const metadata: Metadata = {
   title: "CRM",

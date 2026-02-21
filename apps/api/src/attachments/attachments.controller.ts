@@ -74,16 +74,24 @@ export class AttachmentsController {
 
   @Get(':id/download')
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
-  @ApiOperation({ summary: 'Download attachment file' })
-  @ApiResponse({ status: 200, description: 'File stream' })
+  @ApiOperation({ summary: 'Download attachment (redirect to signed URL or stream)' })
+  @ApiResponse({ status: 200, description: 'File stream (local) or 302 redirect (S3)' })
   @ApiResponse({ status: 404, description: 'Attachment not found' })
   async download(@Param('id') id: string, @Res() res: Response) {
-    const { attachment, filePath } = await this.attachmentsService.getFilePath(id);
-    const stats = await stat(filePath);
-    res.setHeader('Content-Type', attachment.mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${attachment.fileName}"`);
-    res.setHeader('Content-Length', String(stats.size));
-    createReadStream(filePath).pipe(res);
+    const { attachment, signedUrl, localFilePath } = await this.attachmentsService.getDownload(id);
+    if (signedUrl) {
+      res.redirect(302, signedUrl);
+      return;
+    }
+    if (localFilePath) {
+      const stats = await stat(localFilePath);
+      res.setHeader('Content-Type', attachment.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${attachment.fileName}"`);
+      res.setHeader('Content-Length', String(stats.size));
+      createReadStream(localFilePath).pipe(res);
+      return;
+    }
+    res.status(500).json({ statusCode: 500, message: 'Download not available' });
   }
 
   @Delete(':id')

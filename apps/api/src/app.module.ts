@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -8,6 +8,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { DevModule } from './dev/dev.module';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProbesController } from './probes/probes.controller';
 import { AccountModule } from './account/account.module';
 import { ContactModule } from './contact/contact.module';
 import { LeadModule } from './lead/lead.module';
@@ -17,8 +18,11 @@ import { AiModule } from './ai/ai.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
+import { env } from './config/env';
+import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
+import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
-const devOnly = process.env.NODE_ENV !== 'production';
+const devOnly = env.NODE_ENV !== 'production';
 
 @Module({
   imports: [
@@ -35,11 +39,16 @@ const devOnly = process.env.NODE_ENV !== 'production';
     UsersModule,
     ...(devOnly ? [DevModule] : []),
   ],
-  controllers: [AppController, HealthController],
+  controllers: [AppController, HealthController, ProbesController],
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestLoggerMiddleware).forRoutes('*');
+  }
+}

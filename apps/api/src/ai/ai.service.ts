@@ -11,6 +11,7 @@ import { AiContextService } from './ai-context.service';
 import type { DraftEmailDto } from './dto/draft-email.dto';
 import type { GenerateSummaryDto } from './dto/summary.dto';
 import type { NextActionsDto } from './dto/next-actions.dto';
+import { env } from '../config/env';
 
 export interface DraftEmailResult {
   activityId: string;
@@ -46,6 +47,10 @@ const VALID_ACTION_TYPES = ['call', 'email', 'task', 'meeting', 'research'];
 
 @Injectable()
 export class AiService {
+  private getOpenAiModel(): string {
+    return env.OPENAI_MODEL;
+  }
+
   constructor(
     private readonly contextService: AiContextService,
     private readonly activityService: ActivityService,
@@ -145,7 +150,7 @@ Return up to ${count} actions, ordered by priority (1 first).`;
       payload: {
         actions: parsed.actions,
         generatedAt: new Date().toISOString(),
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        model: this.getOpenAiModel(),
         inputs: { activityCount: 50, attachmentCount: 0 },
       },
     });
@@ -222,7 +227,7 @@ All fields except subject and body are optional. Keep the email concise and prof
         recipientEmail: recipientEmail ?? undefined,
         suggestedRecipients: parsed.suggestedRecipients,
         generatedAt: new Date().toISOString(),
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        model: this.getOpenAiModel(),
       },
     });
 

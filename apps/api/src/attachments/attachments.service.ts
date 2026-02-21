@@ -1,33 +1,41 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { Attachment, Prisma } from '@crm/db';
+import { Attachment } from '@crm/db';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 import { User } from '@crm/db';
+import { env } from '../config/env';
 import { UPLOADS_DIR } from './uploads.constants';
+import type { StorageService } from './storage/storage.interface';
 
 const ENTITY_TYPES = ['account', 'contact', 'lead', 'opportunity'] as const;
 const TEXT_MIME_PREFIXES = ['text/', 'application/json', 'application/xml'];
+
+export interface DownloadResult {
+  attachment: Attachment;
+  signedUrl: string | null;
+  localFilePath: string | null;
+}
 
 @Injectable()
 export class AttachmentsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
+    @Inject('STORAGE_SERVICE') private readonly storage: StorageService,
   ) {}
 
   async onModuleInit(): Promise<void> {
-    await this.ensureUploadsDir();
-  }
-
-  async ensureUploadsDir(): Promise<void> {
-    await fs.mkdir(UPLOADS_DIR, { recursive: true });
+    if (env.STORAGE_PROVIDER === 'local') {
+      await fs.mkdir(UPLOADS_DIR, { recursive: true });
+    }
   }
 
   private isTextExtractable(mimeType: string): boolean {
@@ -38,11 +46,10 @@ export class AttachmentsService implements OnModuleInit {
     });
   }
 
-  private async extractTextFromFile(filePath: string, mimeType: string): Promise<string | null> {
+  private extractTextFromBuffer(buffer: Buffer, mimeType: string): string | null {
     if (!this.isTextExtractable(mimeType)) return null;
     try {
-      const buf = await fs.readFile(filePath, 'utf-8');
-      return buf.slice(0, 100_000);
+      return buffer.toString('utf-8').slice(0, 100_000);
     } catch {
       return null;
     }
@@ -71,21 +78,17 @@ export class AttachmentsService implements OnModuleInit {
 
     const id = crypto.randomUUID();
     const safeName = this.sanitizeFileName(file.originalname || 'file');
-    const storageKey = path.join(
-      entityType,
-      entityId,
-      `${id}-${safeName}`,
-    ).replace(/\\/g, '/');
+    const storageKey = path
+      .join(entityType, entityId, `${id}-${safeName}`)
+      .replace(/\\/g, '/');
 
-    const fullPath = path.join(UPLOADS_DIR, storageKey);
-    const dir = path.dirname(fullPath);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(fullPath, file.buffer);
+    const contentType = file.mimetype || 'application/octet-stream';
+    const extractedText = this.extractTextFromBuffer(file.buffer, contentType);
 
-    let extractedText: string | null = null;
-    if (this.isTextExtractable(file.mimetype || '')) {
-      extractedText = await this.extractTextFromFile(fullPath, file.mimetype || '');
-    }
+    const { bucket } = await this.storage.upload(file.buffer, storageKey, {
+      contentType,
+      metadata: { originalName: file.originalname || 'file' },
+    });
 
     const attachment = await this.prisma.attachment.create({
       data: {
@@ -93,9 +96,10 @@ export class AttachmentsService implements OnModuleInit {
         entityType,
         entityId,
         fileName: file.originalname || 'file',
-        mimeType: file.mimetype || 'application/octet-stream',
+        mimeType: contentType,
         size: file.size,
         storageKey,
+        bucket,
         uploadedByUserId: user.id,
         extractedText,
       },
@@ -129,20 +133,31 @@ export class AttachmentsService implements OnModuleInit {
     return a;
   }
 
-  async getFilePath(id: string): Promise<{ attachment: Attachment; filePath: string }> {
+  async getDownload(id: string): Promise<DownloadResult> {
     const attachment = await this.findOne(id);
-    const filePath = path.join(UPLOADS_DIR, attachment.storageKey);
-    return { attachment, filePath };
+    const signedUrl = await this.storage.getSignedDownloadUrl(
+      attachment.storageKey,
+      attachment.bucket,
+      {
+        expiresInSeconds: 3600,
+        responseContentDisposition: `attachment; filename="${attachment.fileName.replace(/"/g, '\\"')}"`,
+      },
+    );
+    const localStorage = this.storage as StorageService & { getLocalFilePath?: (key: string) => string | null };
+    const localFilePath =
+      signedUrl === null && localStorage.getLocalFilePath
+        ? localStorage.getLocalFilePath(attachment.storageKey)
+        : null;
+    return {
+      attachment,
+      signedUrl: signedUrl ?? null,
+      localFilePath,
+    };
   }
 
   async remove(id: string, user: User): Promise<void> {
     const attachment = await this.findOne(id);
-    const filePath = path.join(UPLOADS_DIR, attachment.storageKey);
-    try {
-      await fs.unlink(filePath);
-    } catch {
-      // ignore if file already missing
-    }
+    await this.storage.delete(attachment.storageKey, attachment.bucket);
     await this.prisma.attachment.delete({ where: { id } });
     await this.activityService.createRaw({
       entityType: attachment.entityType,
