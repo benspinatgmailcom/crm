@@ -125,6 +125,25 @@ Key APIs:
 
 ---
 
+# Production Deployment Architecture
+
+## Environment Topology
+
+### Web (Frontend)
+- Platform: Vercel
+- Root Directory: `apps/web`
+- Framework Preset: Next.js
+- Build: Default Next.js build
+- Environment Variables:
+  - `NEXT_PUBLIC_API_URL` → Render API URL
+
+### API (Backend)
+- Platform: Render (Docker Web Service)
+- Runtime: Node 22
+- Start Command:
+
+---
+
 # Roadmap
 
 ## Phase 1 – Production Readiness
