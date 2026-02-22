@@ -21,7 +21,6 @@ const navItems = [
   { href: "/settings/users", label: "Settings", adminOnly: true },
 ];
 
-const isDev = typeof window !== "undefined" && process.env.NODE_ENV !== "production";
 
 export default function DashboardLayout({
   children,
@@ -95,7 +94,7 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
-            {isDev && isAdmin(user?.role) && (
+            {isAdmin(user?.role) && (
               <Link
                 href="/dev"
                 className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${

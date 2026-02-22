@@ -8,7 +8,7 @@ Ultimately, this will be part of a project called "Bespoke CRM", where we start 
 ---
 
 ## Current Phase
-Transitioning from feature build to Production Readiness & Deployment.
+Blob storage
 
 ---
 

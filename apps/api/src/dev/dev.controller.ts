@@ -1,12 +1,10 @@
-import { Body, ForbiddenException, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { DevService } from './dev.service';
 import { SeedStoryService, type SeedStoryResult } from './seed-story.service';
 import { SeedStoryDto } from './dto/seed-story.dto';
-import { env } from '../config/env';
 
 @ApiTags('Dev')
 @Controller('dev')
@@ -17,22 +15,19 @@ export class DevController {
   ) {}
 
   @Post('seed')
-  @Public()
-  @ApiOperation({ summary: 'Seed database with sample data (dev only)' })
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Seed database with sample data (ADMIN only)' })
   @ApiResponse({ status: 201, description: 'Seed completed' })
-  @ApiResponse({ status: 403, description: 'Not available in production' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
   async seed(): Promise<{ message: string; counts: Record<string, number> }> {
-    if (env.NODE_ENV === 'production') {
-      throw new ForbiddenException('Seed endpoint is disabled in production');
-    }
     return this.devService.seed();
   }
 
   @Post('seed-story')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Seed story-based demo data (dev only, ADMIN only)' })
+  @ApiOperation({ summary: 'Seed story-based demo data (ADMIN only)' })
   @ApiResponse({ status: 201, description: 'Story seed completed' })
-  @ApiResponse({ status: 403, description: 'Not available in production or not ADMIN' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
   async seedStory(@Body() dto: SeedStoryDto): Promise<SeedStoryResult> {
     return this.seedStoryService.seedStory(dto);
   }

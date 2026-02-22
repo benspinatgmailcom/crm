@@ -116,10 +116,6 @@ export class SeedStoryService {
   }
 
   async seedStory(dto: SeedStoryDto): Promise<SeedStoryResult> {
-    if (env.NODE_ENV === 'production') {
-      throw new ForbiddenException('Story seed is disabled in production');
-    }
-
     const reset = dto.reset ?? false;
     const includeFiller = dto.includeFiller ?? false;
     const fillerCount = Math.max(0, Math.min(20, dto.fillerAccounts ?? 2));
