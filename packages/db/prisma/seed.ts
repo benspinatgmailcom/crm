@@ -1,13 +1,40 @@
+/// <reference types="node" />
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+
+console.log("🌱 SEED SCRIPT EXECUTING");
 
 const prisma = new PrismaClient();
 
 async function main() {
+  // Delete in FK-safe order: Lead references Opportunity, Contact, Account; Attachment references User (we keep users)
   await prisma.activity.deleteMany();
+  await prisma.attachment.deleteMany();
+  await prisma.lead.deleteMany();
   await prisma.opportunity.deleteMany();
   await prisma.contact.deleteMany();
-  await prisma.lead.deleteMany();
   await prisma.account.deleteMany();
+
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@crm.local';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!';
+  const adminRole = process.env.SEED_ADMIN_ROLE ?? 'ADMIN';
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    create: {
+      email: adminEmail,
+      role: adminRole,
+      isActive: true,
+      passwordHash,
+    },
+    update: {
+      role: adminRole,
+      isActive: true,
+      passwordHash,
+    },
+  });
+  console.log('Admin user upserted:', adminEmail);
 
   const account1 = await prisma.account.create({
     data: {
