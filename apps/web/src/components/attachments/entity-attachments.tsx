@@ -98,23 +98,12 @@ export function EntityAttachments({
   };
 
   const handleDownloadClick = async (id: string, fileName: string) => {
-    const { getAccessToken } = await import("@/lib/auth-store");
-    const token = getAccessToken();
-    const url = `${env.NEXT_PUBLIC_API_URL}/attachments/${id}/download`;
     try {
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error("Download failed");
-      const blob = await res.blob();
-      const u = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = u;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(u);
+      const { apiDownloadFile } = await import("@/lib/api-client");
+      await apiDownloadFile(`/attachments/${id}/download`, fileName);
     } catch {
-      window.open(url, "_blank");
+      // Fallback: open in new tab (user may need to re-login)
+      window.open(`${env.NEXT_PUBLIC_API_URL}/attachments/${id}/download`, "_blank");
     }
   };
 
