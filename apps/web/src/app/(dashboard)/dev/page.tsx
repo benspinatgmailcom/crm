@@ -70,7 +70,7 @@ export default function DevPage() {
     <div className="max-w-2xl space-y-6">
       <h1 className="text-xl font-semibold text-gray-900">Dev Tools</h1>
       <p className="text-sm text-gray-500">
-        Story-based demo seed. Only available when not in production and for ADMIN users.
+        Story-based demo seed. Only available for ADMIN users.
       </p>
 
       <form onSubmit={handleSeed} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm space-y-4">
