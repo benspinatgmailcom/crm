@@ -74,11 +74,23 @@ export class AttachmentsController {
 
   @Get(':id/download')
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
-  @ApiOperation({ summary: 'Download attachment (redirect to signed URL or stream)' })
-  @ApiResponse({ status: 200, description: 'File stream (local) or 302 redirect (S3)' })
+  @ApiOperation({ summary: 'Download attachment (redirect/stream) or get presigned URL (?format=json)' })
+  @ApiResponse({ status: 200, description: 'File stream (local), 302 redirect (S3), or JSON { url } when format=json' })
   @ApiResponse({ status: 404, description: 'Attachment not found' })
-  async download(@Param('id') id: string, @Res() res: Response) {
+  async download(
+    @Param('id') id: string,
+    @Query('format') format: string | undefined,
+    @Res() res: Response,
+  ) {
     const { attachment, signedUrl, localFilePath } = await this.attachmentsService.getDownload(id);
+
+    if (format === 'json') {
+      if (signedUrl) {
+        return res.json({ url: signedUrl, fileName: attachment.fileName });
+      }
+      return res.json({ url: null, fileName: attachment.fileName });
+    }
+
     if (signedUrl) {
       res.redirect(302, signedUrl);
       return;

@@ -133,6 +133,14 @@ export async function apiDelete(path: string): Promise<void> {
   }
 }
 
+/** Get download URL for an attachment (S3: presigned URL; local: null). Uses auth + refresh. */
+export async function apiGetDownloadUrl(
+  path: string
+): Promise<{ url: string | null; fileName: string }> {
+  const pathWithFormat = path.includes("?") ? `${path}&format=json` : `${path}?format=json`;
+  return apiFetch<{ url: string | null; fileName: string }>(pathWithFormat);
+}
+
 /** Download file with auth (retries once after refresh on 401). Triggers browser download. */
 export async function apiDownloadFile(
   path: string,

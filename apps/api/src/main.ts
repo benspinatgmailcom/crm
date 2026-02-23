@@ -10,7 +10,12 @@ import { env } from './config/env';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors({ origin: true }); // Allow same-origin and localhost dev origins
+  // Allow frontend origin; must allow Authorization header for Bearer token in production (cross-origin)
+  app.enableCors({
+    origin: true, // reflect request origin, or set to env.FRONTEND_URL / list of origins in production
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
