@@ -117,7 +117,8 @@ model Attachment {
   mimeType          String
   size              Int
   storageKey        String
-  bucket            String?   // null = local storage
+  storageDriver     String    @default("local") // "local" | "s3"
+  bucket            String?   // null = local; S3 bucket name when driver=s3
   uploadedByUserId  String
   extractedText     String?
   createdAt         DateTime  @default(now())

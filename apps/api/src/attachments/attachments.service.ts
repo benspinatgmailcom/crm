@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { Attachment } from '@crm/db';
 import * as fs from 'fs/promises';
@@ -13,7 +14,8 @@ import { ActivityService } from '../activity/activity.service';
 import { User } from '@crm/db';
 import { env } from '../config/env';
 import { UPLOADS_DIR } from './uploads.constants';
-import type { StorageService } from './storage/storage.interface';
+import type { StorageProvider } from './storage/storage-provider.interface';
+import { LocalDiskStorageProvider } from './storage/local-disk-storage.provider';
 
 const ENTITY_TYPES = ['account', 'contact', 'lead', 'opportunity'] as const;
 const TEXT_MIME_PREFIXES = ['text/', 'application/json', 'application/xml'];
@@ -29,13 +31,27 @@ export class AttachmentsService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
-    @Inject('STORAGE_SERVICE') private readonly storage: StorageService,
+    @Inject('STORAGE_PROVIDER') private readonly defaultProvider: StorageProvider,
+    @Inject('STORAGE_PROVIDER_S3') @Optional() private readonly s3Provider: StorageProvider | null,
+    @Inject('STORAGE_DRIVER') private readonly currentDriver: string,
+    private readonly localProvider: LocalDiskStorageProvider,
   ) {}
 
   async onModuleInit(): Promise<void> {
-    if (env.STORAGE_PROVIDER === 'local') {
+    if (this.currentDriver === 'local') {
       await fs.mkdir(UPLOADS_DIR, { recursive: true });
     }
+  }
+
+  private getProvider(driver: string): StorageProvider {
+    const effective = driver === 's3' ? 's3' : 'local';
+    if (effective === 's3') {
+      if (!this.s3Provider) {
+        throw new BadRequestException('S3 storage not configured; cannot serve S3 attachment');
+      }
+      return this.s3Provider;
+    }
+    return this.localProvider;
   }
 
   private isTextExtractable(mimeType: string): boolean {
@@ -78,17 +94,24 @@ export class AttachmentsService implements OnModuleInit {
 
     const id = crypto.randomUUID();
     const safeName = this.sanitizeFileName(file.originalname || 'file');
+    const timestamp = Date.now();
     const storageKey = path
-      .join(entityType, entityId, `${id}-${safeName}`)
+      .join(entityType, entityId, `${timestamp}-${safeName}`)
       .replace(/\\/g, '/');
 
     const contentType = file.mimetype || 'application/octet-stream';
     const extractedText = this.extractTextFromBuffer(file.buffer, contentType);
 
-    const { bucket } = await this.storage.upload(file.buffer, storageKey, {
+    const storageDriver = env.STORAGE_DRIVER ?? env.STORAGE_PROVIDER ?? 'local';
+    const provider = this.getProvider(storageDriver);
+
+    await provider.putObject({
+      key: storageKey,
+      buffer: file.buffer,
       contentType,
-      metadata: { originalName: file.originalname || 'file' },
     });
+
+    const bucket = storageDriver === 's3' ? (env.S3_BUCKET_NAME ?? env.S3_BUCKET ?? null) : null;
 
     const attachment = await this.prisma.attachment.create({
       data: {
@@ -99,6 +122,7 @@ export class AttachmentsService implements OnModuleInit {
         mimeType: contentType,
         size: file.size,
         storageKey,
+        storageDriver,
         bucket,
         uploadedByUserId: user.id,
         extractedText,
@@ -135,19 +159,21 @@ export class AttachmentsService implements OnModuleInit {
 
   async getDownload(id: string): Promise<DownloadResult> {
     const attachment = await this.findOne(id);
-    const signedUrl = await this.storage.getSignedDownloadUrl(
-      attachment.storageKey,
-      attachment.bucket,
-      {
-        expiresInSeconds: 3600,
-        responseContentDisposition: `attachment; filename="${attachment.fileName.replace(/"/g, '\\"')}"`,
-      },
-    );
-    const localStorage = this.storage as StorageService & { getLocalFilePath?: (key: string) => string | null };
+    const driver = attachment.storageDriver ?? (attachment.bucket ? 's3' : 'local');
+    const provider = this.getProvider(driver);
+
+    const expiresSeconds = env.S3_URL_EXPIRES_SECONDS ?? 3600;
+    const signedUrl = await provider.getSignedUrl({
+      key: attachment.storageKey,
+      expiresSeconds,
+    });
+
+    const localProvider = provider as StorageProvider & { getLocalFilePath?: (key: string) => string | null };
     const localFilePath =
-      signedUrl === null && localStorage.getLocalFilePath
-        ? localStorage.getLocalFilePath(attachment.storageKey)
+      signedUrl === null && localProvider.getLocalFilePath
+        ? localProvider.getLocalFilePath(attachment.storageKey)
         : null;
+
     return {
       attachment,
       signedUrl: signedUrl ?? null,
@@ -157,7 +183,9 @@ export class AttachmentsService implements OnModuleInit {
 
   async remove(id: string, user: User): Promise<void> {
     const attachment = await this.findOne(id);
-    await this.storage.delete(attachment.storageKey, attachment.bucket);
+    const driver = attachment.storageDriver ?? (attachment.bucket ? 's3' : 'local');
+    const provider = this.getProvider(driver);
+    await provider.deleteObject({ key: attachment.storageKey });
     await this.prisma.attachment.delete({ where: { id } });
     await this.activityService.createRaw({
       entityType: attachment.entityType,
