@@ -99,10 +99,14 @@ export function EntityAttachments({
 
   const handleDownloadClick = async (id: string, fileName: string) => {
     try {
-      const { apiDownloadFile } = await import("@/lib/api-client");
-      await apiDownloadFile(`/attachments/${id}/download`, fileName);
+      const { apiGetDownloadUrl, apiDownloadFile } = await import("@/lib/api-client");
+      const { url } = await apiGetDownloadUrl(`/attachments/${id}/download`);
+      if (url) {
+        window.open(url, "_blank");
+      } else {
+        await apiDownloadFile(`/attachments/${id}/download`, fileName);
+      }
     } catch {
-      // Fallback: open in new tab (user may need to re-login)
       window.open(`${env.NEXT_PUBLIC_API_URL}/attachments/${id}/download`, "_blank");
     }
   };
