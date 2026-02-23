@@ -18,11 +18,8 @@ import { AiModule } from './ai/ai.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
-import { env } from './config/env';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
-
-const devOnly = env.NODE_ENV !== 'production';
 
 @Module({
   imports: [
@@ -37,7 +34,7 @@ const devOnly = env.NODE_ENV !== 'production';
     AiModule,
     AttachmentsModule,
     UsersModule,
-    ...(devOnly ? [DevModule] : []),
+    DevModule,
   ],
   controllers: [AppController, HealthController, ProbesController],
   providers: [
