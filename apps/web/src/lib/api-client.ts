@@ -133,19 +133,35 @@ export async function apiDelete(path: string): Promise<void> {
   }
 }
 
-/** Download file with auth. Triggers browser download. */
+/** Download file with auth (retries once after refresh on 401). Triggers browser download. */
 export async function apiDownloadFile(
   path: string,
   filename: string
 ): Promise<void> {
   const baseUrl = getBaseUrl();
   const url = path.startsWith("http") ? path : `${baseUrl}${path}`;
-  const token = getAccessToken();
-  const headers: HeadersInit = {};
-  if (token) {
-    (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
-  }
-  const res = await fetch(url, { headers });
+
+  const doFetch = async (retryAfterRefresh = false): Promise<Response> => {
+    const token = getAccessToken();
+    const headers: HeadersInit = {};
+    if (token) {
+      (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(url, { headers });
+
+    if (res.status === 401 && !retryAfterRefresh) {
+      const refreshed = await tryRefresh();
+      if (refreshed) return doFetch(true);
+      clearTokens();
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+      throw new Error("Download failed");
+    }
+    return res;
+  };
+
+  const res = await doFetch();
   if (!res.ok) throw new Error("Download failed");
   const blob = await res.blob();
   const a = document.createElement("a");
