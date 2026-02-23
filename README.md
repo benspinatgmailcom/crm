@@ -82,6 +82,18 @@ pnpm db:studio  # Prisma Studio UI
 
 CRUD routes require JWT. Use Swagger "Authorize" with the access token.
 
+### Attachments & storage
+
+- **Development:** `STORAGE_DRIVER=local` (default). Files are stored under `apps/api/uploads/`. No extra env needed.
+- **Production (S3):** Set `STORAGE_DRIVER=s3`, `S3_BUCKET_NAME`, and `AWS_REGION` (or `S3_REGION`). Optionally: `S3_KEY_PREFIX`, `S3_URL_EXPIRES_SECONDS` (default 3600), `S3_ENDPOINT` (S3-compatible), `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or use IAM). Bucket is not public; downloads use presigned URLs.
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /attachments` | Upload (multipart: entityType, entityId, file) |
+| `GET /attachments?entityType=&entityId=` | List attachments for entity |
+| `GET /attachments/:id/download` | Download (redirect to signed URL for S3, or stream for local) |
+| `DELETE /attachments/:id` | Delete attachment |
+
 ## Scripts
 
 | Command       | Description                    |
