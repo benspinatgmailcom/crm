@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
@@ -9,7 +9,7 @@ import { env } from "@/lib/env";
 
 const logoUrl = env.NEXT_PUBLIC_LOGO_URL || null;
 
-export default function LoginPage() {
+function LoginContent() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -170,5 +170,19 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-slate-950">
+          <p className="text-white/80">Loading...</p>
+        </main>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }
