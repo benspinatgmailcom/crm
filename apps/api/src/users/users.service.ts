@@ -2,10 +2,12 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { Role } from '../auth/constants';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -26,26 +28,19 @@ export interface CreateUserResult {
   role: string;
   isActive: boolean;
   createdAt: Date;
-  tempPassword: string;
+  tempPassword?: string;
 }
 
 export interface ResetPasswordResult {
   tempPassword: string;
 }
 
-function randomPassword(length = 12): string {
-  const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
-  let result = '';
-  const bytes = crypto.randomBytes(length);
-  for (let i = 0; i < length; i++) {
-    result += chars[bytes[i]! % chars.length];
-  }
-  return result;
-}
-
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   async findAll(): Promise<UserListItem[]> {
     const users = await this.prisma.user.findMany({
@@ -83,8 +78,10 @@ export class UsersService {
       throw new ConflictException('User with this email already exists');
     }
 
-    const tempPassword = dto.tempPassword ?? randomPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    const passwordHash = await bcrypt.hash(
+      crypto.randomBytes(32).toString('hex'),
+      12,
+    );
 
     const user = await this.prisma.user.create({
       data: {
@@ -96,13 +93,27 @@ export class UsersService {
       },
     });
 
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await this.prisma.passwordResetToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
+
+    try {
+      await this.emailService.sendSetPasswordEmail(user.email, rawToken);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown';
+      console.error('[UsersService.create] Set-password email failed for', user.email, msg);
+    }
+
     return {
       id: user.id,
       email: user.email,
       role: user.role,
       isActive: user.isActive,
       createdAt: user.createdAt,
-      tempPassword,
     };
   }
 
@@ -130,20 +141,28 @@ export class UsersService {
     return { ...updated, lastLoginAt: null };
   }
 
-  async resetPassword(id: string, dto: ResetPasswordDto): Promise<ResetPasswordResult> {
+  async resetPassword(id: string, _dto: ResetPasswordDto): Promise<ResetPasswordResult> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
 
-    const tempPassword = dto.tempPassword ?? randomPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 12);
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-    await this.prisma.user.update({
-      where: { id },
-      data: { passwordHash, mustChangePassword: true },
+    await this.prisma.passwordResetToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
     });
 
-    return { tempPassword };
+    try {
+      await this.emailService.sendSetPasswordEmail(user.email, rawToken);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send email';
+      console.error('[UsersService.resetPassword] Email failed:', message);
+      throw new BadRequestException(message);
+    }
+
+    return { tempPassword: '' };
   }
 }

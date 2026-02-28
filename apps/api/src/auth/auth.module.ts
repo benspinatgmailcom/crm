@@ -6,11 +6,13 @@ import { AuthService } from './auth.service';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { authConfig } from './auth.config';
+import { EmailModule } from '../email/email.module';
 
 const config = authConfig().jwt;
 
 @Module({
   imports: [
+    EmailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
       secret: config.accessSecret,

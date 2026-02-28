@@ -16,6 +16,7 @@ import { OpportunityModule } from './opportunity/opportunity.module';
 import { ActivityModule } from './activity/activity.module';
 import { AiModule } from './ai/ai.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { EmailModule } from './email/email.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
@@ -33,6 +34,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
     ActivityModule,
     AiModule,
     AttachmentsModule,
+    EmailModule,
     UsersModule,
     DevModule,
   ],

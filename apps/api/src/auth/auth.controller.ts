@@ -7,6 +7,8 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt.guard';
 import { AuthService, AuthTokens } from './auth.service';
 
@@ -63,6 +65,24 @@ export class AuthController {
   async logout(@Body() dto: RefreshDto): Promise<{ message: string }> {
     await this.authService.logout(dto.refreshToken);
     return { message: 'Logged out' };
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request password reset email' })
+  @ApiResponse({ status: 200, description: 'Always returns ok (does not reveal if email exists)' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ ok: true }> {
+    await this.authService.requestPasswordReset(dto.email);
+    return { ok: true };
+  }
+
+  @Public()
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset password with token from email' })
+  @ApiResponse({ status: 200, description: 'Always returns ok' })
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ ok: true }> {
+    await this.authService.resetPassword(dto.token, dto.newPassword);
+    return { ok: true };
   }
 
   @Get('me')

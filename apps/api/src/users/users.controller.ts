@@ -24,7 +24,7 @@ export class UsersController {
 
   @Post()
   @ApiOperation({ summary: 'Create user (ADMIN only)' })
-  @ApiResponse({ status: 201, description: 'User created; returns user + tempPassword' })
+  @ApiResponse({ status: 201, description: 'User created; set-password email sent' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   @ApiResponse({ status: 409, description: 'Email already exists' })

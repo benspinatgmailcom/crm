@@ -28,10 +28,6 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [resetPasswordModal, setResetPasswordModal] = useState<{
-    userId: string;
-    tempPassword: string;
-  } | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<{
     user: UserItem;
     action: "deactivate" | "activate";
@@ -110,24 +106,18 @@ export default function UsersPage() {
   const handleResetPassword = useCallback(
     async (userId: string) => {
       try {
-        const res = await apiFetch<{ tempPassword: string }>(
-          `/users/${userId}/reset-password`,
-          { method: "POST", body: "{}" }
-        );
-        setResetPasswordModal({ userId, tempPassword: res.tempPassword });
+        await apiFetch(`/users/${userId}/reset-password`, {
+          method: "POST",
+          body: "{}",
+        });
+        showToast("Set-password email sent to user.");
       } catch (err: unknown) {
         const e = err as { body?: { message?: string }; message?: string };
-        showToast(e.body?.message ?? e.message ?? "Failed to reset password.");
+        showToast(e.body?.message ?? e.message ?? "Failed to send reset email.");
       }
     },
     [showToast]
   );
-
-  const copyToClipboard = useCallback((text: string) => {
-    navigator.clipboard.writeText(text);
-    setToast("Copied to clipboard.");
-    setTimeout(() => setToast(null), 2000);
-  }, []);
 
   if (user && !isAdmin(user.role)) {
     return (
@@ -258,48 +248,15 @@ export default function UsersPage() {
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         onSuccess={(created) => {
-          const { tempPassword: _, ...userWithoutPass } = created;
           setUsers((prev) => [
-            { ...userWithoutPass, lastLoginAt: null },
+            { ...created, lastLoginAt: null },
             ...prev,
           ]);
           setCreateModalOpen(false);
-          setResetPasswordModal({
-            userId: created.id,
-            tempPassword: created.tempPassword,
-          });
-          showToast("User created.");
+          showToast("User created. A set-password email has been sent to their address.");
         }}
         showToast={showToast}
       />
-
-      {resetPasswordModal && (
-        <Modal
-          isOpen
-          onClose={() => setResetPasswordModal(null)}
-          title="Temporary password"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Copy this temporary password and share it securely with the user.
-              They will need to change it after first login.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded bg-gray-100 px-3 py-2 font-mono text-sm">
-                {resetPasswordModal.tempPassword}
-              </code>
-              <button
-                onClick={() =>
-                  copyToClipboard(resetPasswordModal.tempPassword)
-                }
-                className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90"
-              >
-                Copy
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
 
       <ConfirmDialog
         isOpen={!!deactivateTarget}
@@ -330,12 +287,11 @@ function CreateUserModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: UserItem & { tempPassword: string }) => void;
+  onSuccess: (user: UserItem) => void;
   showToast: (msg: string) => void;
 }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("USER");
-  const [tempPassword, setTempPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -344,19 +300,13 @@ function CreateUserModal({
     setSubmitError(null);
     setSubmitting(true);
     try {
-      const body: { email: string; role: string; tempPassword?: string } = {
-        email: email.trim(),
-        role,
-      };
-      if (tempPassword.trim()) body.tempPassword = tempPassword.trim();
-      const res = await apiFetch<UserItem & { tempPassword: string }>(
-        "/users",
-        { method: "POST", body: JSON.stringify(body) }
-      );
+      const res = await apiFetch<UserItem>("/users", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), role }),
+      });
       onSuccess(res);
       setEmail("");
       setRole("USER");
-      setTempPassword("");
     } catch (err: unknown) {
       const e = err as { body?: { message?: string }; message?: string };
       const msg = e.body?.message ?? e.message ?? "Failed to create user";
@@ -403,18 +353,9 @@ function CreateUserModal({
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Temp password (optional, auto-generated if empty)
-          </label>
-          <input
-            type="text"
-            value={tempPassword}
-            onChange={(e) => setTempPassword(e.target.value)}
-            placeholder="Leave empty to auto-generate"
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1"
-          />
-        </div>
+        <p className="text-sm text-gray-500">
+          A set-password link will be sent to the user&apos;s email. They must set their password before signing in.
+        </p>
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
