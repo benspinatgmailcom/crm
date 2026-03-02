@@ -1,0 +1,23 @@
+services:
+  metabase:
+    image: metabase/metabase:latest
+    ports:
+      - "3000:3000"
+    environment:
+      # Optional now; useful later for embedding parity with prod:
+      MB_SITE_URL: http://localhost:3000
+    depends_on:
+      - metabase_app_db
+
+  # Metabase application DB (recommended vs default H2)
+  metabase_app_db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: metabase
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: metabase_pw
+    volumes:
+      - metabase_app_db_data:/var/lib/postgresql/data
+
+volumes:
+  metabase_app_db_data:

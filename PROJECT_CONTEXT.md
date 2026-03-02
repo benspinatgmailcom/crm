@@ -8,7 +8,7 @@ Ultimately, this will be part of a project called "Bespoke CRM", where we start 
 ---
 
 ## Current Phase
-Password reset via email
+Connect  Metabase platform for reports and dashboards
 
 ---
 
@@ -128,6 +128,15 @@ Key APIs:
 # Production Deployment Architecture
 
 ## Environment Topology
+Browser
+   ↓
+Next.js (React UI + API routes)
+   ↓
+NestJS Backend (REST / GraphQL / Webhooks)
+   ↓
+PostgreSQL (Prisma ORM)
+   ↓
+External APIs (OpenAI, Salesforce, etc)
 
 ### Web (Frontend)
 - Platform: Vercel
@@ -142,19 +151,32 @@ Key APIs:
 - Runtime: Node 22
 - Start Command:
 
+### Database 
+- PostgreSQL + Prisma ORM
+- Hosted in Neon
+
+### Email Provider
+- Resend
+
+### Blob Storage
+- AWS S3
+
+### Analytics
+- Metabase
+
 ---
 
 # Roadmap
 
 ## Phase 1 – Production Readiness
-- Deploy web + API
-- Managed Postgres
-- Blob storage
+- Deploy web + API (Done)
+- Managed Postgres (Done)
+- Blob storage (Done)
 - Env validation
 - AI rate limiting
 - Logging & monitoring
 - Backups
-- Password reset via email
+- Password reset via email (Done)
 - Audit log
 
 ## Phase 2 – Workflow Intelligence

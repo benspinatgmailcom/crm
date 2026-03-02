@@ -4,6 +4,15 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import {
+  BarChart,
+  Building2,
+  Contact,
+  Settings,
+  Target,
+  Briefcase,
+  Wrench,
+} from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { isAdmin } from "@/lib/roles";
 import { ApiStatus } from "@/components/api-status";
@@ -13,12 +22,18 @@ import { env } from "@/lib/env";
 
 const logoUrl = env.NEXT_PUBLIC_LOGO_URL || null;
 
-const navItems = [
-  { href: "/accounts", label: "Accounts" },
-  { href: "/contacts", label: "Contacts" },
-  { href: "/leads", label: "Leads" },
-  { href: "/opportunities", label: "Opportunities" },
-  { href: "/settings/users", label: "Settings", adminOnly: true },
+const navItems: Array<{
+  href: string;
+  label: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
+}> = [
+  { href: "/accounts", label: "Accounts", icon: Building2 },
+  { href: "/contacts", label: "Contacts", icon: Contact },
+  { href: "/leads", label: "Leads", icon: Target },
+  { href: "/opportunities", label: "Opportunities", icon: Briefcase },
+  { href: "/reports", label: "Reports", icon: BarChart },
+  { href: "/settings/users", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
 
@@ -84,12 +99,15 @@ export default function DashboardLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                     isActive
                       ? "bg-accent-1/15 text-accent-1"
                       : "text-white/80 hover:bg-white/5 hover:text-white"
                   }`}
                 >
+                  {item.icon ? (
+                    <item.icon className="h-4 w-4 shrink-0" aria-hidden />
+                  ) : null}
                   {item.label}
                 </Link>
               );
@@ -97,12 +115,13 @@ export default function DashboardLayout({
             {isAdmin(user?.role) && (
               <Link
                 href="/dev"
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
                   pathname === "/dev"
                     ? "bg-accent-1/15 text-accent-1"
                     : "text-white/80 hover:bg-white/5 hover:text-white"
                 }`}
               >
+                <Wrench className="h-4 w-4 shrink-0" aria-hidden />
                 Dev Tools
               </Link>
             )}
