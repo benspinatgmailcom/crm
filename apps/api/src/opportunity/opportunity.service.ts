@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Opportunity, Prisma } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { ActivityService } from '../activity/activity.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { QueryOpportunityDto } from './dto/query-opportunity.dto';
@@ -8,7 +9,10 @@ import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
 
 @Injectable()
 export class OpportunityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly activityService: ActivityService,
+  ) {}
 
   async create(dto: CreateOpportunityDto): Promise<Opportunity> {
     const account = await this.prisma.account.findUnique({ where: { id: dto.accountId } });
@@ -36,6 +40,12 @@ export class OpportunityService {
     'closed-lost',
   ] as const;
 
+  /** Days from date to ref; null if date is null. Uses floor for whole days. */
+  private static daysSince(date: Date | null, ref: Date): number | null {
+    if (date == null) return null;
+    return Math.floor((ref.getTime() - date.getTime()) / 86400000);
+  }
+
   async getPipeline(): Promise<Record<string, Array<{
     id: string;
     name: string;
@@ -44,6 +54,8 @@ export class OpportunityService {
     stage: string | null;
     accountId: string;
     accountName: string;
+    daysSinceLastTouch: number | null;
+    daysInStage: number | null;
   }>>> {
     const opportunities = await this.prisma.opportunity.findMany({
       select: {
@@ -53,10 +65,13 @@ export class OpportunityService {
         closeDate: true,
         stage: true,
         accountId: true,
+        lastActivityAt: true,
+        lastStageChangedAt: true,
         account: { select: { name: true } },
       },
     });
 
+    const now = new Date();
     const result: Record<string, Array<{
       id: string;
       name: string;
@@ -65,6 +80,8 @@ export class OpportunityService {
       stage: string | null;
       accountId: string;
       accountName: string;
+      daysSinceLastTouch: number | null;
+      daysInStage: number | null;
     }>> = {};
     for (const s of OpportunityService.PIPELINE_STAGES) {
       result[s] = [];
@@ -81,6 +98,8 @@ export class OpportunityService {
         stage: o.stage,
         accountId: o.accountId,
         accountName: o.account.name,
+        daysSinceLastTouch: OpportunityService.daysSince(o.lastActivityAt, now),
+        daysInStage: OpportunityService.daysSince(o.lastStageChangedAt, now),
       };
       if (OpportunityService.PIPELINE_STAGES.includes(stage as (typeof OpportunityService.PIPELINE_STAGES)[number])) {
         result[stage].push(entry);
@@ -120,15 +139,35 @@ export class OpportunityService {
   }
 
   async update(id: string, dto: UpdateOpportunityDto): Promise<Opportunity> {
-    await this.findOne(id);
-    return await this.prisma.opportunity.update({
+    const current = await this.prisma.opportunity.findUnique({ where: { id } });
+    if (!current) throw new NotFoundException(`Opportunity ${id} not found`);
+
+    const stageChanged =
+      dto.stage !== undefined && dto.stage !== current.stage;
+    const now = new Date();
+
+    const updated = await this.prisma.opportunity.update({
       where: { id },
       data: {
         ...dto,
         amount: dto.amount !== undefined ? dto.amount : undefined,
         closeDate: dto.closeDate !== undefined ? (dto.closeDate ? new Date(dto.closeDate) : null) : undefined,
+        ...(stageChanged && {
+          lastStageChangedAt: now,
+        }),
       },
     });
+
+    if (stageChanged) {
+      await this.activityService.createRaw({
+        entityType: 'opportunity',
+        entityId: id,
+        type: 'stage_change',
+        payload: { from: current.stage ?? null, to: dto.stage },
+      });
+    }
+
+    return updated;
   }
 
   async remove(id: string): Promise<void> {

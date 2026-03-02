@@ -162,10 +162,11 @@ export class SeedStoryService {
       { firstName: 'Rachel', lastName: 'Foster', email: 'rachel.foster@apexdatacenters.com', title: 'Facilities Ops Lead' },
     ], reset, (n) => { contactsCreated += n; });
 
+    // Stale: touch>=7 or stage>=14. At-risk: touch 5–6 or stage 12–13.
     const apexOpps = await this.ensureOpportunities(apexId, [
-      { name: 'Apex Renewal FY26', stage: 'negotiation', amount: 1_200_000, closeDaysOut: 21 },
-      { name: 'Edge Expansion Phase 1', stage: 'proposal', amount: 450_000, closeDaysOut: 45 },
-      { name: 'Disaster Recovery Add-on', stage: 'qualification', amount: 180_000, closeDaysOut: 60 },
+      { name: 'Apex Renewal FY26', stage: 'negotiation', amount: 1_200_000, closeDaysOut: 21, lastActivityAtDaysAgo: 2, lastStageChangedAtDaysAgo: 3 },
+      { name: 'Edge Expansion Phase 1', stage: 'proposal', amount: 450_000, closeDaysOut: 45, lastActivityAtDaysAgo: 8, lastStageChangedAtDaysAgo: 15 }, // stale
+      { name: 'Disaster Recovery Add-on', stage: 'qualification', amount: 180_000, closeDaysOut: 60, lastActivityAtDaysAgo: 5, lastStageChangedAtDaysAgo: 12 }, // at-risk
     ], reset, (n) => { opportunitiesCreated += n; });
 
     await this.seedApexActivities(apexId, apexContacts, apexOpps, reset, (n) => { activitiesCreated += n; });
@@ -196,8 +197,8 @@ export class SeedStoryService {
     ], reset, (n) => { contactsCreated += n; });
 
     await this.ensureOpportunities(northwindId, [
-      { name: 'Core Network Modernization', stage: 'proposal', amount: 650_000, closeDaysOut: 30 },
-      { name: 'Long-haul Fiber Connectivity', stage: 'qualification', amount: 300_000, closeDaysOut: 75 },
+      { name: 'Core Network Modernization', stage: 'proposal', amount: 650_000, closeDaysOut: 30, lastActivityAtDaysAgo: 6, lastStageChangedAtDaysAgo: 13 }, // at-risk
+      { name: 'Long-haul Fiber Connectivity', stage: 'qualification', amount: 300_000, closeDaysOut: 75, lastActivityAtDaysAgo: 10, lastStageChangedAtDaysAgo: 16 }, // stale
     ], reset, (n) => { opportunitiesCreated += n; });
 
     await this.seedNorthwindActivities(northwindId, northwindContacts, reset, (n) => { activitiesCreated += n; });
@@ -227,7 +228,7 @@ export class SeedStoryService {
     ], reset, (n) => { contactsCreated += n; });
 
     await this.ensureOpportunities(globexId, [
-      { name: 'ERP Integration Modernization', stage: 'qualification', amount: 250_000, closeDaysOut: 90 },
+      { name: 'ERP Integration Modernization', stage: 'qualification', amount: 250_000, closeDaysOut: 90, lastActivityAtDaysAgo: 20, lastStageChangedAtDaysAgo: 25 }, // stale
     ], reset, (n) => { opportunitiesCreated += n; });
 
     await this.seedGlobexActivities(globexId, globexContacts, reset, (n) => { activitiesCreated += n; });
@@ -284,16 +285,27 @@ export class SeedStoryService {
 
   private async ensureOpportunities(
     accountId: string,
-    spec: Array<{ name: string; stage: string; amount: number; closeDaysOut: number }>,
+    spec: Array<{
+      name: string;
+      stage: string;
+      amount: number;
+      closeDaysOut: number;
+      lastActivityAtDaysAgo?: number;
+      lastStageChangedAtDaysAgo?: number;
+    }>,
     reset: boolean,
     onCreated: (n: number) => void,
   ): Promise<Array<{ id: string; name: string }>> {
+    const today = new Date();
     let existing = await this.prisma.opportunity.findMany({ where: { accountId } });
     if (reset || existing.length === 0) {
       if (existing.length) await this.prisma.opportunity.deleteMany({ where: { accountId } });
-      const today = new Date();
       for (const o of spec) {
         const closeDate = addDays(today, o.closeDaysOut);
+        const lastActivityAt =
+          o.lastActivityAtDaysAgo != null ? addDays(today, -o.lastActivityAtDaysAgo) : undefined;
+        const lastStageChangedAt =
+          o.lastStageChangedAtDaysAgo != null ? addDays(today, -o.lastStageChangedAtDaysAgo) : undefined;
         await this.prisma.opportunity.create({
           data: {
             accountId,
@@ -301,10 +313,24 @@ export class SeedStoryService {
             stage: o.stage,
             amount: o.amount,
             closeDate,
+            lastActivityAt,
+            lastStageChangedAt,
           },
         });
       }
       onCreated(spec.length);
+    } else {
+      // Ensure existing story opportunities get aging fields (stale/at-risk) when re-running without reset
+      for (const o of spec) {
+        const lastActivityAt =
+          o.lastActivityAtDaysAgo != null ? addDays(today, -o.lastActivityAtDaysAgo) : undefined;
+        const lastStageChangedAt =
+          o.lastStageChangedAtDaysAgo != null ? addDays(today, -o.lastStageChangedAtDaysAgo) : undefined;
+        await this.prisma.opportunity.updateMany({
+          where: { accountId, name: o.name },
+          data: { lastActivityAt, lastStageChangedAt },
+        });
+      }
     }
     const opps = await this.prisma.opportunity.findMany({ where: { accountId }, select: { id: true, name: true } });
     return opps;
@@ -556,6 +582,21 @@ export class SeedStoryService {
         const range = stageSpec.daysMax - stageSpec.daysMin + 1;
         const days = stageSpec.daysMin + Math.floor(rand() * range);
         const closeDate = addDays(today, days);
+        // Ensure at least one stale (touch>=7 or stage>=14) and one at-risk (touch 5-6 or stage 12-13) when we have 2+ opps
+        let lastActivityAtDaysAgo: number;
+        let lastStageChangedAtDaysAgo: number;
+        if (numOpps >= 2 && o === 0) {
+          lastActivityAtDaysAgo = 10;
+          lastStageChangedAtDaysAgo = 15;
+        } else if (numOpps >= 2 && o === 1) {
+          lastActivityAtDaysAgo = 6;
+          lastStageChangedAtDaysAgo = 13;
+        } else {
+          lastActivityAtDaysAgo = Math.floor(rand() * 26);
+          lastStageChangedAtDaysAgo = Math.floor(rand() * 21);
+        }
+        const lastActivityAt = lastActivityAtDaysAgo > 0 ? addDays(today, -lastActivityAtDaysAgo) : undefined;
+        const lastStageChangedAt = lastStageChangedAtDaysAgo > 0 ? addDays(today, -lastStageChangedAtDaysAgo) : undefined;
         await this.prisma.opportunity.create({
           data: {
             accountId: account.id,
@@ -563,6 +604,8 @@ export class SeedStoryService {
             stage: stageSpec.stage,
             amount: 50000 + Math.floor(rand() * 100000),
             closeDate,
+            lastActivityAt,
+            lastStageChangedAt,
           },
         });
         opportunitiesCreated++;

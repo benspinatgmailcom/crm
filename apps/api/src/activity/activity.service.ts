@@ -4,6 +4,7 @@ import { validate } from 'class-validator';
 import { Activity, Prisma } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { WorkflowService } from '../workflow/workflow.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { PAYLOAD_DTO_MAP } from './dto/payload-dtos';
 import { QueryActivityDto } from './dto/query-activity.dto';
@@ -11,7 +12,10 @@ import { UpdateActivityDto } from './dto/update-activity.dto';
 
 @Injectable()
 export class ActivityService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workflow: WorkflowService,
+  ) {}
 
   async create(dto: CreateActivityDto): Promise<Activity> {
     const PayloadDto = PAYLOAD_DTO_MAP[dto.type];
@@ -25,7 +29,7 @@ export class ActivityService {
       }
     }
 
-    return await this.prisma.activity.create({
+    const activity = await this.prisma.activity.create({
       data: {
         entityType: dto.entityType,
         entityId: dto.entityId,
@@ -33,6 +37,10 @@ export class ActivityService {
         payload: (dto.payload ?? {}) as Prisma.InputJsonValue,
       },
     });
+    if (dto.entityType === 'opportunity') {
+      await this.workflow.updateLastActivityAt(dto.entityId, activity.createdAt);
+    }
+    return activity;
   }
 
   /** Create activity without payload validation (e.g. for AI-generated ai_summary) */
@@ -42,7 +50,7 @@ export class ActivityService {
     type: string;
     payload: Record<string, unknown>;
   }): Promise<Activity> {
-    return await this.prisma.activity.create({
+    const activity = await this.prisma.activity.create({
       data: {
         entityType: data.entityType,
         entityId: data.entityId,
@@ -50,6 +58,10 @@ export class ActivityService {
         payload: data.payload as Prisma.InputJsonValue,
       },
     });
+    if (data.entityType === 'opportunity') {
+      await this.workflow.updateLastActivityAt(data.entityId, activity.createdAt);
+    }
+    return activity;
   }
 
   async findAll(query: QueryActivityDto): Promise<PaginatedResult<Activity>> {

@@ -8,7 +8,7 @@ Ultimately, this will be part of a project called "Bespoke CRM", where we start 
 ---
 
 ## Current Phase
-Connect  Metabase platform for reports and dashboards
+Workflow Intelligence
 
 ---
 
@@ -178,6 +178,7 @@ External APIs (OpenAI, Salesforce, etc)
 - Backups
 - Password reset via email (Done)
 - Audit log
+= Metabase platform for reports and dashboards (Done)
 
 ## Phase 2 – Workflow Intelligence
 - Deal aging detection

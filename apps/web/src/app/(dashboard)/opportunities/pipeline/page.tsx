@@ -25,6 +25,8 @@ interface PipelineOpportunity {
   stage: string | null;
   accountId: string;
   accountName: string;
+  daysSinceLastTouch: number | null;
+  daysInStage: number | null;
 }
 
 type PipelineData = Record<string, PipelineOpportunity[]>;
@@ -90,7 +92,36 @@ function formatCloseDate(closeDate: string | null): string {
   });
 }
 
+function formatDays(value: number | null): string {
+  if (value == null) return "—";
+  return `${value}d`;
+}
+
 type CloseFilter = "all" | "30" | "60" | "90" | "qtr";
+
+const STALE_LAST_TOUCH_THRESHOLD = 7;
+const STALE_DAYS_IN_STAGE_THRESHOLD = 14;
+const APPROACH_LAST_TOUCH_THRESHOLD = 5; // 2 days before 7
+const APPROACH_DAYS_IN_STAGE_THRESHOLD = 12; // 2 days before 14
+
+function isStale(opp: PipelineOpportunity): boolean {
+  const touch = opp.daysSinceLastTouch;
+  const stage = opp.daysInStage;
+  return (
+    (touch != null && touch >= STALE_LAST_TOUCH_THRESHOLD) ||
+    (stage != null && stage >= STALE_DAYS_IN_STAGE_THRESHOLD)
+  );
+}
+
+function isApproachingStale(opp: PipelineOpportunity): boolean {
+  if (isStale(opp)) return false;
+  const touch = opp.daysSinceLastTouch;
+  const stage = opp.daysInStage;
+  return (
+    (touch != null && touch >= APPROACH_LAST_TOUCH_THRESHOLD && touch < STALE_LAST_TOUCH_THRESHOLD) ||
+    (stage != null && stage >= APPROACH_DAYS_IN_STAGE_THRESHOLD && stage < STALE_DAYS_IN_STAGE_THRESHOLD)
+  );
+}
 
 function getCloseDateRange(close: CloseFilter): { start: Date; end: Date } | null {
   const now = new Date();
@@ -129,9 +160,11 @@ function applyFilters(
     max: number | "";
     account: string;
     includeClosed: boolean;
+    atRiskOnly: boolean;
+    staleOnly: boolean;
   }
 ): PipelineData {
-  const { close, min, max, account, includeClosed } = filters;
+  const { close, min, max, account, includeClosed, atRiskOnly, staleOnly } = filters;
   const accountLower = account.trim().toLowerCase();
   const minVal = min === "" ? -Infinity : Number(min);
   const maxVal = max === "" ? Infinity : Number(max);
@@ -154,6 +187,11 @@ function applyFilters(
           const amt = toNumber(o.amount);
           if (hasMin && amt < minVal) return false;
           if (hasMax && amt > maxVal) return false;
+        }
+        if (atRiskOnly || staleOnly) {
+          const matchAtRisk = atRiskOnly && isApproachingStale(o);
+          const matchStale = staleOnly && isStale(o);
+          if (!matchAtRisk && !matchStale) return false;
         }
         return true;
       });
@@ -271,18 +309,39 @@ function DraggableCard({
     [editing, opp.id, router]
   );
 
+  const staleBadge = isStale(opp) ? (
+    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium text-red-700 bg-red-100">
+      Stale
+    </span>
+  ) : isApproachingStale(opp) ? (
+    <span className="rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-700 bg-amber-100">
+      At risk
+    </span>
+  ) : null;
+
+  const touchAndStageLine = (
+    <div className="mt-1 text-[11px] text-gray-500 space-x-2">
+      <span>Last touch: {formatDays(opp.daysSinceLastTouch ?? null)}</span>
+      <span>In stage: {formatDays(opp.daysInStage ?? null)}</span>
+    </div>
+  );
+
   if (!canDrag) {
     return (
       <div
         onClick={handleCardClick}
         className="group relative cursor-pointer rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-accent-1/30"
       >
-        <div className="text-sm font-medium text-gray-900">{opp.name}</div>
+        <div className="flex items-start justify-between gap-1">
+          <div className="text-sm font-medium text-gray-900">{opp.name}</div>
+          {staleBadge}
+        </div>
         <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
         <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
           <span>{formatAmount(opp.amount)}</span>
           <span>{formatCloseDate(opp.closeDate)}</span>
         </div>
+        {touchAndStageLine}
       </div>
     );
   }
@@ -339,12 +398,16 @@ function DraggableCard({
         isDragging ? "opacity-50 shadow-lg" : ""
       }`}
     >
-      <div className="text-sm font-medium text-gray-900">{opp.name}</div>
+      <div className="flex items-start justify-between gap-1">
+        <div className="text-sm font-medium text-gray-900">{opp.name}</div>
+        {staleBadge}
+      </div>
       <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
       <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
         <span>{formatAmount(opp.amount)}</span>
         <span>{formatCloseDate(opp.closeDate)}</span>
       </div>
+      {touchAndStageLine}
       <button
         type="button"
         data-edit-trigger
@@ -648,6 +711,8 @@ const DEFAULT_FILTERS = {
   max: "" as number | "",
   account: "",
   includeClosed: false,
+  atRiskOnly: false,
+  staleOnly: false,
 };
 
 export default function PipelinePage() {
@@ -666,6 +731,8 @@ export default function PipelinePage() {
     const maxRaw = searchParams.get("max");
     const account = searchParams.get("account") || "";
     const closed = searchParams.get("closed");
+    const atRisk = searchParams.get("atRisk");
+    const stale = searchParams.get("stale");
     const minNum = minRaw != null && minRaw !== "" ? Number(minRaw) : NaN;
     const maxNum = maxRaw != null && maxRaw !== "" ? Number(maxRaw) : NaN;
     return {
@@ -674,6 +741,8 @@ export default function PipelinePage() {
       max: Number.isFinite(maxNum) ? maxNum : ("" as number | ""),
       account,
       includeClosed: closed === "1",
+      atRiskOnly: atRisk === "1",
+      staleOnly: stale === "1",
     };
   });
 
@@ -692,6 +761,8 @@ export default function PipelinePage() {
       if (f.account.trim()) params.set("account", f.account.trim());
       else params.delete("account");
       params.set("closed", f.includeClosed ? "1" : "0");
+      params.set("atRisk", f.atRiskOnly ? "1" : "0");
+      params.set("stale", f.staleOnly ? "1" : "0");
       const url = `/opportunities/pipeline?${params.toString()}`;
       queueMicrotask(() => {
         router.replace(url, { scroll: false });
@@ -965,7 +1036,9 @@ export default function PipelinePage() {
     filters.min !== "" ||
     filters.max !== "" ||
     filters.account.trim() !== "" ||
-    filters.includeClosed;
+    filters.includeClosed ||
+    filters.atRiskOnly ||
+    filters.staleOnly;
 
   return (
     <div>
@@ -1039,6 +1112,24 @@ export default function PipelinePage() {
             className="rounded border-gray-300 text-accent-1 focus:ring-accent-1"
           />
           <span className="text-gray-600">Include closed</span>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={filters.atRiskOnly}
+            onChange={(e) => updateFilter("atRiskOnly", e.target.checked)}
+            className="rounded border-gray-300 text-accent-1 focus:ring-accent-1"
+          />
+          <span className="text-gray-600">At Risk</span>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={filters.staleOnly}
+            onChange={(e) => updateFilter("staleOnly", e.target.checked)}
+            className="rounded border-gray-300 text-accent-1 focus:ring-accent-1"
+          />
+          <span className="text-gray-600">Stale</span>
         </label>
         {hasActiveFilters && (
           <button
