@@ -63,16 +63,21 @@ model Lead {
 }
 
 model Opportunity {
-  id            String    @id @default(cuid())
-  accountId     String
-  name          String
-  amount        Decimal?  @db.Decimal(14, 2)
-  stage         String?   @default("prospecting")
-  probability   Int?
-  closeDate     DateTime?
-  sourceLeadId  String?  @unique
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  accountId           String
+  name                String
+  amount              Decimal?  @db.Decimal(14, 2)
+  stage               String?   @default("prospecting")
+  probability         Int?
+  closeDate           DateTime?
+  sourceLeadId        String?   @unique
+  lastActivityAt      DateTime?
+  lastStageChangedAt  DateTime?
+  nextFollowUpAt      DateTime?
+  healthScore         Int?
+  healthSignals       Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   account    Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   sourceLead Lead?   @relation("OpportunitySourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
@@ -87,6 +92,7 @@ model Activity {
   entityId   String
   type       String    // note, call, meeting, email, task, ai_summary
   payload    Json?     @default("{}")
+  metadata   Json?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
