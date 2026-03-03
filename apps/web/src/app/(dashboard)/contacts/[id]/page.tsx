@@ -6,6 +6,8 @@ import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Pencil, Eye } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
@@ -219,12 +221,12 @@ export default function ContactDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             {canEdit && (
-            <button
+            <ActionIconButton
+              icon={Pencil}
+              label="Edit Contact"
               onClick={openEdit}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Edit Contact
-            </button>
+              className="rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            />
             )}
           </div>
         </div>
@@ -259,9 +261,11 @@ export default function ContactDetailPage() {
                 <div>
                   <dt className="text-gray-500">Created from Lead</dt>
                   <dd className="text-gray-900">
-                    <Link href={`/leads/${contact.sourceLeadId}`} className="text-accent-1 hover:underline">
-                      View lead
-                    </Link>
+                    <ActionIconButton
+                      icon={Eye}
+                      label="View lead"
+                      href={`/leads/${contact.sourceLeadId}`}
+                    />
                   </dd>
                 </div>
               )}
@@ -287,12 +291,12 @@ export default function ContactDetailPage() {
                   {account.website}
                 </a>
               )}
-              <Link
+              <ActionIconButton
+                icon={Eye}
+                label="View full account"
                 href={`/accounts/${account.id}`}
-                className="mt-2 inline-block text-sm text-accent-1 hover:underline"
-              >
-                View full account →
-              </Link>
+                className="mt-2 inline-block"
+              />
             </div>
           )}
 
@@ -300,12 +304,11 @@ export default function ContactDetailPage() {
             <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
                 <h2 className="text-sm font-semibold text-gray-900">Related Opportunities</h2>
-                <Link
+                <ActionIconButton
+                  icon={Eye}
+                  label="View all on account"
                   href={`/accounts/${account.id}`}
-                  className="text-sm text-accent-1 hover:underline"
-                >
-                  View all on account
-                </Link>
+                />
               </div>
               <div className="divide-y divide-gray-200">
                 {opportunities.length === 0 ? (

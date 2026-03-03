@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import { apiFetch, apiUpload, apiDownloadFile, apiDelete } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Download, Trash2 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
 import type { ActivityEntityType } from "./entity-activity-timeline";
@@ -172,26 +174,22 @@ export function EntityAttachmentsPanel({
                 <span className="text-xs text-gray-400 shrink-0 ml-2">
                   {formatDate(a.createdAt)}
                 </span>
-                <div className="flex items-center gap-2 shrink-0 ml-2">
+                <div className="flex items-center gap-1 shrink-0 ml-2">
                   {pathVal && (
-                    <button
-                      type="button"
+                    <ActionIconButton
+                      icon={Download}
+                      label="Download"
                       onClick={() => handleDownload(pathVal, filename)}
-                      className="text-accent-1 hover:underline text-xs"
-                    >
-                      Download
-                    </button>
+                    />
                   )}
                   {canDelete && (
-                    <button
-                      type="button"
+                    <ActionIconButton
+                      icon={Trash2}
+                      label={deleting ? "Deleting..." : "Delete"}
+                      variant="danger"
                       onClick={() => setDeleteId(a.id)}
                       disabled={deleting}
-                      className="text-red-600 hover:text-red-700 text-xs disabled:opacity-50"
-                      title="Delete attachment"
-                    >
-                      {deleting ? "Deleting..." : "Delete"}
-                    </button>
+                    />
                   )}
                 </div>
               </li>

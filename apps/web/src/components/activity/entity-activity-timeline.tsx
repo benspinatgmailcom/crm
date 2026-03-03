@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch, apiDownloadFile, apiDelete } from "@/lib/api-client";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Download, Trash2 } from "lucide-react";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuth } from "@/context/auth-context";
@@ -132,18 +134,16 @@ function ActivityItem({
           <div className="text-sm flex items-center gap-2">
             <span className="text-gray-700">{filename}</span>
             {hasDownload && (
-              <button
-                type="button"
+              <ActionIconButton
+                icon={Download}
+                label="Download"
                 onClick={() =>
                   apiDownloadFile(
                     `/uploads/download?path=${encodeURIComponent(pathVal)}`,
                     filename
                   )
                 }
-                className="text-accent-1 hover:underline text-xs"
-              >
-                Download
-              </button>
+              />
             )}
           </div>
         );
@@ -200,15 +200,13 @@ function ActivityItem({
           <div className="mt-1">{renderContent()}</div>
         </div>
         {canDelete && (
-          <button
-            type="button"
+          <ActionIconButton
+            icon={Trash2}
+            label={deleting ? "Deleting..." : "Delete"}
+            variant="danger"
             onClick={() => onDelete(activity.id)}
             disabled={deleting}
-            className="shrink-0 text-red-600 hover:text-red-700 text-xs disabled:opacity-50"
-            title="Delete activity"
-          >
-            {deleting ? "Deleting..." : "Delete"}
-          </button>
+          />
         )}
       </div>
     </div>

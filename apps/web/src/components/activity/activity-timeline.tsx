@@ -5,6 +5,8 @@ import { apiFetch } from "@/lib/api-client";
 import { Pagination } from "@/components/ui/pagination";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Eye } from "lucide-react";
 import { AddActivityModal } from "./add-activity-modal";
 import { GenerateAiSummaryModal } from "./generate-ai-summary-modal";
 import { DraftEmailModal } from "@/components/ai/draft-email-modal";
@@ -155,9 +157,9 @@ function ActivityItem({ activity }: { activity: Activity }) {
         return (
           <div className="space-y-1 text-sm text-gray-700">
             <p>Lead converted to Account, Contact, and Opportunity.</p>
-            {p.accountId ? <p><span className="text-gray-500">Account:</span> <a href={`/accounts/${String(p.accountId)}`} className="text-accent-1 hover:underline">View</a></p> : null}
-            {p.contactId ? <p><span className="text-gray-500">Contact:</span> <a href={`/contacts/${String(p.contactId)}`} className="text-accent-1 hover:underline">View</a></p> : null}
-            {p.opportunityId ? <p><span className="text-gray-500">Opportunity:</span> <a href={`/opportunities/${String(p.opportunityId)}`} className="text-accent-1 hover:underline">View</a></p> : null}
+            {p.accountId ? <p className="flex items-center gap-1"><span className="text-gray-500">Account:</span> <ActionIconButton icon={Eye} label="View" href={`/accounts/${String(p.accountId)}`} /></p> : null}
+            {p.contactId ? <p className="flex items-center gap-1"><span className="text-gray-500">Contact:</span> <ActionIconButton icon={Eye} label="View" href={`/contacts/${String(p.contactId)}`} /></p> : null}
+            {p.opportunityId ? <p className="flex items-center gap-1"><span className="text-gray-500">Opportunity:</span> <ActionIconButton icon={Eye} label="View" href={`/opportunities/${String(p.opportunityId)}`} /></p> : null}
           </div>
         );
       case "ai_recommendation": {

@@ -6,6 +6,8 @@ import { canWrite } from "@/lib/roles";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Download, Trash2 } from "lucide-react";
 import { env } from "@/lib/env";
 import type { ActivityEntityType } from "@/components/activity/activity-timeline";
 
@@ -154,20 +156,19 @@ export function EntityAttachments({
                   {formatSize(a.size)} • {formatDate(a.createdAt)}
                 </p>
               </div>
-              <div className="ml-2 flex gap-2">
-                <button
+              <div className="ml-2 flex gap-1">
+                <ActionIconButton
+                  icon={Download}
+                  label="Download"
                   onClick={() => handleDownloadClick(a.id, a.fileName)}
-                  className="text-accent-1 hover:underline"
-                >
-                  Download
-                </button>
+                />
                 {canEdit && (
-                <button
+                <ActionIconButton
+                  icon={Trash2}
+                  label="Delete"
+                  variant="danger"
                   onClick={() => setDeleteId(a.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
+                />
                 )}
               </div>
             </li>

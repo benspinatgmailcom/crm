@@ -10,6 +10,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { opportunitySchema, type OpportunityFormData } from "@/lib/validation";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 interface Opportunity {
   id: string;
@@ -327,33 +329,25 @@ export default function OpportunitiesPage() {
                       {opp.closeDate ? new Date(opp.closeDate).toLocaleDateString() : "—"}
                     </td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-2">
-                        <button
+                      <div className="flex justify-end gap-1">
+                        <ActionIconButton
+                          icon={Eye}
+                          label="View"
                           onClick={() => router.push(`/opportunities/${opp.id}`)}
-                          className="text-sm text-accent-1 hover:underline"
-                        >
-                          View
-                        </button>
+                        />
                         {canEdit && (
                         <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(opp);
-                          }}
-                          className="text-sm text-accent-1 hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteId(opp.id);
-                          }}
-                          className="text-sm text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
+                        <ActionIconButton
+                          icon={Pencil}
+                          label="Edit"
+                          onClick={() => openEdit(opp)}
+                        />
+                        <ActionIconButton
+                          icon={Trash2}
+                          label="Delete"
+                          variant="danger"
+                          onClick={() => setDeleteId(opp.id)}
+                        />
                         </>
                         )}
                       </div>
