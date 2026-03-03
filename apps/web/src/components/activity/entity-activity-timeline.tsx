@@ -19,6 +19,7 @@ interface Activity {
   id: string;
   type: string;
   payload: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -58,10 +59,53 @@ function ActivityItem({
   isDeleting: string | null;
 }) {
   const p = activity.payload ?? {};
+  const m = activity.metadata ?? {};
   const type = activity.type;
 
   const renderContent = () => {
     switch (type) {
+      case "followup_suggested": {
+        const title = String(m.title ?? "Follow-up suggested");
+        const description = m.description != null ? String(m.description) : null;
+        const suggestedDueAt = m.suggestedDueAt != null ? String(m.suggestedDueAt) : null;
+        const severity = m.severity != null ? String(m.severity) : null;
+        const reasonCodes = Array.isArray(m.reasonCodes) ? (m.reasonCodes as string[]) : [];
+        return (
+          <div className="text-sm space-y-1">
+            <p className="font-medium text-gray-900">{title}</p>
+            {description && <p className="text-gray-700">{description}</p>}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {suggestedDueAt && <span className="text-gray-500">Due: {new Date(suggestedDueAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>}
+              {severity && <span className={`rounded px-1.5 py-0.5 font-medium ${severity === "critical" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{severity}</span>}
+              {reasonCodes.length > 0 && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">{reasonCodes.join(", ")}</span>}
+            </div>
+          </div>
+        );
+      }
+      case "task_created": {
+        const title = String(m.title ?? "Task");
+        const description = m.description != null ? String(m.description) : null;
+        const dueAt = m.dueAt != null ? String(m.dueAt) : null;
+        const status = m.status != null ? String(m.status) : null;
+        return (
+          <div className="text-sm space-y-1">
+            <p className="font-medium text-gray-900">{title}</p>
+            {description && <p className="text-gray-700">{description}</p>}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {dueAt && <span className="text-gray-500">Due: {new Date(dueAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>}
+              {status && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">{status}</span>}
+            </div>
+          </div>
+        );
+      }
+      case "task_completed":
+        return <p className="text-sm text-gray-700">Task marked as <span className="font-medium text-green-700">completed</span>.</p>;
+      case "task_dismissed":
+        return <p className="text-sm text-gray-700">Task <span className="font-medium text-gray-600">dismissed</span>.</p>;
+      case "task_snoozed": {
+        const until = m.snoozedUntil != null ? String(m.snoozedUntil) : null;
+        return <p className="text-sm text-gray-700">Task snoozed{until ? ` until ${new Date(until).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}` : ""}.</p>;
+      }
       case "note":
         return <p className="text-sm text-gray-700">{String(p.text ?? "")}</p>;
       case "task":
@@ -179,8 +223,22 @@ function ActivityItem({
           </div>
         );
       }
-      default:
+      default: {
+        const followupTaskTypes = ["followup_suggested", "task_created", "task_completed", "task_dismissed", "task_snoozed"];
+        if (followupTaskTypes.includes(type) && m && typeof m === "object") {
+          const title = m.title != null ? String(m.title) : type === "followup_suggested" ? "Follow-up suggested" : type === "task_created" ? "Task" : type.replace(/_/g, " ");
+          const desc = m.description != null ? String(m.description) : null;
+          const due = (m.suggestedDueAt ?? m.dueAt) != null ? String(m.suggestedDueAt ?? m.dueAt) : null;
+          return (
+            <div className="text-sm space-y-1">
+              <p className="font-medium text-gray-900">{title}</p>
+              {desc && <p className="text-gray-700">{desc}</p>}
+              {due && <span className="text-gray-500 text-xs">Due: {new Date(due).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>}
+            </div>
+          );
+        }
         return <p className="text-sm text-gray-500">{type}</p>;
+      }
     }
   };
 
