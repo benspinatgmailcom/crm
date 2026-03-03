@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Clock, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -37,6 +38,11 @@ interface Opportunity {
   stage: string | null;
   probability: number | null;
   closeDate: string | null;
+  daysSinceLastTouch?: number | null;
+  daysInStage?: number | null;
+  healthScore?: number;
+  healthStatus?: "healthy" | "warning" | "critical";
+  healthSignals?: Array<{ code: string; severity: string; message: string; penalty: number }>;
 }
 
 const STAGE_OPTIONS = ["prospecting", "discovery", "qualification", "proposal", "negotiation", "closed-won", "closed-lost"];
@@ -45,6 +51,67 @@ function formatAmount(amount: { toString(): string } | null): string {
   if (amount == null) return "—";
   const n = Number(amount.toString());
   return isNaN(n) ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+}
+
+function formatDays(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${value}d`;
+}
+
+function OpportunityHealthPill({ opp }: { opp: Opportunity }) {
+  const score = opp.healthScore;
+  const status = opp.healthStatus;
+  const signals = opp.healthSignals ?? [];
+  if (score == null || status == null) return <span className="text-gray-400">—</span>;
+  const label = `${status.charAt(0).toUpperCase() + status.slice(1)} · ${score}`;
+  const bg =
+    status === "healthy"
+      ? "bg-emerald-100 text-emerald-700"
+      : status === "warning"
+        ? "bg-amber-100 text-amber-700"
+        : "bg-red-100 text-red-700";
+  const title =
+    signals.length > 0
+      ? signals.map((s) => s.message).join("\n")
+      : "Health is scored 0–100 from recent activity, stage movement, and follow-ups. 80+ healthy, 50–79 warning, 0–49 critical.";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${bg}`}
+      title={title}
+    >
+      {status === "healthy" ? <CheckCircle className="h-3 w-3" /> : status === "warning" ? <AlertTriangle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+      {label}
+    </span>
+  );
+}
+
+function OpportunityAgingPill({ opp }: { opp: Opportunity }) {
+  const touch = opp.daysSinceLastTouch ?? null;
+  const stage = opp.daysInStage ?? null;
+  const stale = (touch != null && touch >= 7) || (stage != null && stage >= 14);
+  const atRisk =
+    !stale &&
+    ((touch != null && touch >= 5 && touch < 7) || (stage != null && stage >= 12 && stage < 14));
+  const touchLabel = touch != null ? `${touch} days since last activity` : "No recent activity recorded";
+  const stageLabel = stage != null ? `${stage} days in current stage` : "Stage tenure unknown";
+  const title = [touchLabel, stageLabel, "Stale = 7+ days since touch or 14+ days in stage.", "At risk = within 2 days of those thresholds."].join("\n");
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-[11px] text-gray-600"
+      title={title}
+    >
+      <Clock className="h-3 w-3 text-gray-400" />
+      <span>
+        {formatDays(touch)} / {formatDays(stage)}
+      </span>
+      {stale && (
+        <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Stale</span>
+      )}
+      {atRisk && (
+        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">At risk</span>
+      )}
+    </span>
+  );
 }
 
 export default function AccountDetailPage() {
@@ -440,13 +507,15 @@ export default function AccountDetailPage() {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Name</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Amount</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Stage</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Health</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Aging</th>
                     <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {opportunities.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500">No opportunities yet.</td>
+                      <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500">No opportunities yet.</td>
                     </tr>
                   ) : (
                     opportunities.map((o) => (
@@ -458,6 +527,12 @@ export default function AccountDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">{formatAmount(o.amount)}</td>
                         <td className="px-4 py-3 text-sm text-gray-500">{o.stage ?? "—"}</td>
+                        <td className="px-4 py-3">
+                          <OpportunityHealthPill opp={o} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <OpportunityAgingPill opp={o} />
+                        </td>
                         <td className="px-4 py-3 text-right">
                           {canEdit && (
                           <>

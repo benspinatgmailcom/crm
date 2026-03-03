@@ -17,6 +17,13 @@ import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
 import { Modal } from "@/components/ui/modal";
 
+interface HealthSignal {
+  code: string;
+  severity: string;
+  message: string;
+  penalty: number;
+}
+
 interface PipelineOpportunity {
   id: string;
   name: string;
@@ -27,6 +34,9 @@ interface PipelineOpportunity {
   accountName: string;
   daysSinceLastTouch: number | null;
   daysInStage: number | null;
+  healthScore?: number;
+  healthStatus?: "healthy" | "warning" | "critical";
+  healthSignals?: HealthSignal[];
 }
 
 type PipelineData = Record<string, PipelineOpportunity[]>;
@@ -97,6 +107,33 @@ function formatDays(value: number | null): string {
   return `${value}d`;
 }
 
+function healthStatusLabel(status: "healthy" | "warning" | "critical"): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function HealthPill({ opp }: { opp: PipelineOpportunity }) {
+  const score = opp.healthScore;
+  const status = opp.healthStatus;
+  const signals = opp.healthSignals ?? [];
+  if (score == null || status == null) return null;
+  const label = `${healthStatusLabel(status)} · ${score}`;
+  const title = signals.length > 0 ? signals.map((s) => s.message).join("\n") : undefined;
+  const bg =
+    status === "healthy"
+      ? "bg-emerald-100 text-emerald-700"
+      : status === "warning"
+        ? "bg-amber-100 text-amber-700"
+        : "bg-red-100 text-red-700";
+  return (
+    <div
+      className={`mt-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${bg} w-fit`}
+      title={title}
+    >
+      {label}
+    </div>
+  );
+}
+
 type CloseFilter = "all" | "30" | "60" | "90" | "qtr";
 
 const STALE_LAST_TOUCH_THRESHOLD = 7;
@@ -152,6 +189,8 @@ function matchesCloseFilter(
   return d >= range.start && d <= range.end;
 }
 
+type AgingFilter = "all" | "stale" | "atRisk";
+
 function applyFilters(
   raw: PipelineData,
   filters: {
@@ -160,11 +199,11 @@ function applyFilters(
     max: number | "";
     account: string;
     includeClosed: boolean;
-    atRiskOnly: boolean;
-    staleOnly: boolean;
+    agingFilter: AgingFilter;
+    healthStatus: HealthFilter;
   }
 ): PipelineData {
-  const { close, min, max, account, includeClosed, atRiskOnly, staleOnly } = filters;
+  const { close, min, max, account, includeClosed, agingFilter, healthStatus } = filters;
   const accountLower = account.trim().toLowerCase();
   const minVal = min === "" ? -Infinity : Number(min);
   const maxVal = max === "" ? Infinity : Number(max);
@@ -188,11 +227,9 @@ function applyFilters(
           if (hasMin && amt < minVal) return false;
           if (hasMax && amt > maxVal) return false;
         }
-        if (atRiskOnly || staleOnly) {
-          const matchAtRisk = atRiskOnly && isApproachingStale(o);
-          const matchStale = staleOnly && isStale(o);
-          if (!matchAtRisk && !matchStale) return false;
-        }
+        if (agingFilter === "stale" && !isStale(o)) return false;
+        if (agingFilter === "atRisk" && !isApproachingStale(o)) return false;
+        if (healthStatus !== "all" && o.healthStatus !== healthStatus) return false;
         return true;
       });
     }
@@ -319,10 +356,20 @@ function DraggableCard({
     </span>
   ) : null;
 
-  const touchAndStageLine = (
-    <div className="mt-1 text-[11px] text-gray-500 space-x-2">
+  const touchLabel = opp.daysSinceLastTouch != null ? `${opp.daysSinceLastTouch} days since last activity` : "No recent activity recorded";
+  const stageLabel = opp.daysInStage != null ? `${opp.daysInStage} days in current stage` : "Stage tenure unknown";
+  const agingTooltip = [
+    touchLabel,
+    stageLabel,
+    "Stale = 7+ days since touch or 14+ days in stage.",
+    "At risk = within 2 days of those thresholds.",
+  ].join("\n");
+
+  const agingPill = (
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500" title={agingTooltip}>
       <span>Last touch: {formatDays(opp.daysSinceLastTouch ?? null)}</span>
       <span>In stage: {formatDays(opp.daysInStage ?? null)}</span>
+      {staleBadge}
     </div>
   );
 
@@ -332,16 +379,14 @@ function DraggableCard({
         onClick={handleCardClick}
         className="group relative cursor-pointer rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md hover:border-accent-1/30"
       >
-        <div className="flex items-start justify-between gap-1">
-          <div className="text-sm font-medium text-gray-900">{opp.name}</div>
-          {staleBadge}
-        </div>
+        <div className="text-sm font-medium text-gray-900">{opp.name}</div>
         <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
         <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
           <span>{formatAmount(opp.amount)}</span>
           <span>{formatCloseDate(opp.closeDate)}</span>
         </div>
-        {touchAndStageLine}
+        <HealthPill opp={opp} />
+        {agingPill}
       </div>
     );
   }
@@ -398,16 +443,14 @@ function DraggableCard({
         isDragging ? "opacity-50 shadow-lg" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-1">
-        <div className="text-sm font-medium text-gray-900">{opp.name}</div>
-        {staleBadge}
-      </div>
+      <div className="text-sm font-medium text-gray-900">{opp.name}</div>
       <div className="mt-1 text-xs text-gray-500">{opp.accountName}</div>
       <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
         <span>{formatAmount(opp.amount)}</span>
         <span>{formatCloseDate(opp.closeDate)}</span>
       </div>
-      {touchAndStageLine}
+      <HealthPill opp={opp} />
+      {agingPill}
       <button
         type="button"
         data-edit-trigger
@@ -705,14 +748,29 @@ const CLOSE_OPTIONS: { value: CloseFilter; label: string }[] = [
   { value: "qtr", label: "This quarter" },
 ];
 
+const AGING_OPTIONS: { value: AgingFilter; label: string }[] = [
+  { value: "all", label: "Aging: All" },
+  { value: "stale", label: "Aging: Stale" },
+  { value: "atRisk", label: "Aging: At Risk" },
+];
+
+type HealthFilter = "all" | "healthy" | "warning" | "critical";
+
+const HEALTH_OPTIONS: { value: HealthFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "healthy", label: "Healthy" },
+  { value: "warning", label: "Warning" },
+  { value: "critical", label: "Critical" },
+];
+
 const DEFAULT_FILTERS = {
   close: "all" as CloseFilter,
   min: "" as number | "",
   max: "" as number | "",
   account: "",
   includeClosed: false,
-  atRiskOnly: false,
-  staleOnly: false,
+  agingFilter: "all" as AgingFilter,
+  healthStatus: "all" as HealthFilter,
 };
 
 export default function PipelinePage() {
@@ -731,18 +789,20 @@ export default function PipelinePage() {
     const maxRaw = searchParams.get("max");
     const account = searchParams.get("account") || "";
     const closed = searchParams.get("closed");
-    const atRisk = searchParams.get("atRisk");
-    const stale = searchParams.get("stale");
+    const aging = searchParams.get("aging");
+    const health = searchParams.get("health");
     const minNum = minRaw != null && minRaw !== "" ? Number(minRaw) : NaN;
     const maxNum = maxRaw != null && maxRaw !== "" ? Number(maxRaw) : NaN;
+    const agingValid = AGING_OPTIONS.some((o) => o.value === aging);
+    const healthValid = HEALTH_OPTIONS.some((o) => o.value === health);
     return {
       close: CLOSE_OPTIONS.some((o) => o.value === close) ? close : "all",
       min: Number.isFinite(minNum) ? minNum : ("" as number | ""),
       max: Number.isFinite(maxNum) ? maxNum : ("" as number | ""),
       account,
       includeClosed: closed === "1",
-      atRiskOnly: atRisk === "1",
-      staleOnly: stale === "1",
+      agingFilter: agingValid ? (aging as AgingFilter) : "all",
+      healthStatus: healthValid ? (health as HealthFilter) : "all",
     };
   });
 
@@ -761,8 +821,10 @@ export default function PipelinePage() {
       if (f.account.trim()) params.set("account", f.account.trim());
       else params.delete("account");
       params.set("closed", f.includeClosed ? "1" : "0");
-      params.set("atRisk", f.atRiskOnly ? "1" : "0");
-      params.set("stale", f.staleOnly ? "1" : "0");
+      if (f.agingFilter !== "all") params.set("aging", f.agingFilter);
+      else params.delete("aging");
+      if (f.healthStatus !== "all") params.set("health", f.healthStatus);
+      else params.delete("health");
       const url = `/opportunities/pipeline?${params.toString()}`;
       queueMicrotask(() => {
         router.replace(url, { scroll: false });
@@ -1037,8 +1099,8 @@ export default function PipelinePage() {
     filters.max !== "" ||
     filters.account.trim() !== "" ||
     filters.includeClosed ||
-    filters.atRiskOnly ||
-    filters.staleOnly;
+    filters.agingFilter !== "all" ||
+    filters.healthStatus !== "all";
 
   return (
     <div>
@@ -1113,24 +1175,34 @@ export default function PipelinePage() {
           />
           <span className="text-gray-600">Include closed</span>
         </label>
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={filters.atRiskOnly}
-            onChange={(e) => updateFilter("atRiskOnly", e.target.checked)}
-            className="rounded border-gray-300 text-accent-1 focus:ring-accent-1"
-          />
-          <span className="text-gray-600">At Risk</span>
-        </label>
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={filters.staleOnly}
-            onChange={(e) => updateFilter("staleOnly", e.target.checked)}
-            className="rounded border-gray-300 text-accent-1 focus:ring-accent-1"
-          />
-          <span className="text-gray-600">Stale</span>
-        </label>
+        <select
+          value={filters.agingFilter}
+          onChange={(e) =>
+            updateFilter("agingFilter", e.target.value as AgingFilter)
+          }
+          className="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1"
+          aria-label="Aging"
+        >
+          {AGING_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.healthStatus}
+          onChange={(e) =>
+            updateFilter("healthStatus", e.target.value as HealthFilter)
+          }
+          className="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1"
+          aria-label="Health score"
+        >
+          {HEALTH_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              Health: {o.label}
+            </option>
+          ))}
+        </select>
         {hasActiveFilters && (
           <button
             type="button"
