@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
@@ -10,6 +11,13 @@ import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
 import { opportunitySchema, type OpportunityFormData } from "@/lib/validation";
+
+interface HealthSignal {
+  code: string;
+  severity: string;
+  message: string;
+  penalty: number;
+}
 
 interface Opportunity {
   id: string;
@@ -20,6 +28,14 @@ interface Opportunity {
   probability: number | null;
   closeDate: string | null;
   sourceLeadId?: string | null;
+  lastActivityAt?: string | null;
+  lastStageChangedAt?: string | null;
+  nextFollowUpAt?: string | null;
+  daysSinceLastTouch?: number | null;
+  daysInStage?: number | null;
+  healthScore?: number;
+  healthStatus?: "healthy" | "warning" | "critical";
+  healthSignals?: HealthSignal[];
 }
 
 interface Account {
@@ -43,6 +59,15 @@ function formatAmount(amount: { toString(): string } | null): string {
   if (amount == null) return "—";
   const n = Number(amount.toString());
   return isNaN(n) ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+}
+
+function formatDays(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return `${value} day${value === 1 ? "" : "s"}`;
+}
+
+function healthStatusLabel(status: "healthy" | "warning" | "critical"): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 export default function OpportunityDetailPage() {
@@ -238,6 +263,104 @@ export default function OpportunityDetailPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          {(opportunity.healthScore != null || opportunity.daysSinceLastTouch != null || opportunity.daysInStage != null) && (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-3 text-sm font-semibold text-gray-900">Deal health & aging</h2>
+              <div className="space-y-4">
+                {opportunity.healthScore != null && opportunity.healthStatus != null && (
+                  <div className="flex gap-3">
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                        opportunity.healthStatus === "healthy"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : opportunity.healthStatus === "warning"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {opportunity.healthStatus === "healthy" ? (
+                        <CheckCircle className="h-5 w-5" />
+                      ) : opportunity.healthStatus === "warning" ? (
+                        <AlertTriangle className="h-5 w-5" />
+                      ) : (
+                        <XCircle className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-sm font-medium ${
+                            opportunity.healthStatus === "healthy"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : opportunity.healthStatus === "warning"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          <Heart className="h-3.5 w-3.5" />
+                          {healthStatusLabel(opportunity.healthStatus)} · {opportunity.healthScore}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-xs text-gray-500">
+                        Health is scored 0–100 from recent activity, stage movement, and follow-ups. 80+ is healthy, 50–79 warning, 0–49 critical.
+                      </p>
+                      {opportunity.healthSignals && opportunity.healthSignals.length > 0 && (
+                        <ul className="mt-2 list-inside list-disc space-y-0.5 text-xs text-gray-600">
+                          {opportunity.healthSignals.map((s, i) => (
+                            <li key={i}>{s.message}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {(opportunity.daysSinceLastTouch != null || opportunity.daysInStage != null) && (
+                  <div className="flex gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-600">
+                      <Clock className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-sm text-gray-700">
+                          <Activity className="h-3.5 w-3.5" />
+                          Last touch: {formatDays(opportunity.daysSinceLastTouch ?? null)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-sm text-gray-700">
+                          In stage: {formatDays(opportunity.daysInStage ?? null)}
+                        </span>
+                        {(() => {
+                          const touch = opportunity.daysSinceLastTouch ?? null;
+                          const stage = opportunity.daysInStage ?? null;
+                          const stale = (touch != null && touch >= 7) || (stage != null && stage >= 14);
+                          const atRisk =
+                            !stale &&
+                            ((touch != null && touch >= 5 && touch < 7) || (stage != null && stage >= 12 && stage < 14));
+                          if (stale) {
+                            return (
+                              <span className="rounded-md bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                                Stale
+                              </span>
+                            );
+                          }
+                          if (atRisk) {
+                            return (
+                              <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                At risk
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                      <p className="mt-1.5 text-xs text-gray-500">
+                        Stale = 7+ days since last activity or 14+ days in current stage. At risk = within 2 days of those thresholds.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">Opportunity details</h2>
             <dl className="space-y-2 text-sm">

@@ -3,6 +3,7 @@ import { Opportunity, Prisma } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
 import { ActivityService } from '../activity/activity.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { computeHealthScore } from './health-scoring';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { QueryOpportunityDto } from './dto/query-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
@@ -56,6 +57,9 @@ export class OpportunityService {
     accountName: string;
     daysSinceLastTouch: number | null;
     daysInStage: number | null;
+    healthScore: number;
+    healthStatus: 'healthy' | 'warning' | 'critical';
+    healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
   }>>> {
     const opportunities = await this.prisma.opportunity.findMany({
       select: {
@@ -67,6 +71,7 @@ export class OpportunityService {
         accountId: true,
         lastActivityAt: true,
         lastStageChangedAt: true,
+        nextFollowUpAt: true,
         account: { select: { name: true } },
       },
     });
@@ -82,6 +87,9 @@ export class OpportunityService {
       accountName: string;
       daysSinceLastTouch: number | null;
       daysInStage: number | null;
+      healthScore: number;
+      healthStatus: 'healthy' | 'warning' | 'critical';
+      healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
     }>> = {};
     for (const s of OpportunityService.PIPELINE_STAGES) {
       result[s] = [];
@@ -90,6 +98,15 @@ export class OpportunityService {
 
     for (const o of opportunities) {
       const stage = o.stage || 'prospecting';
+      const daysSinceLastTouch = OpportunityService.daysSince(o.lastActivityAt, now);
+      const daysInStage = OpportunityService.daysSince(o.lastStageChangedAt, now);
+      const health = computeHealthScore({
+        stage: o.stage,
+        daysSinceLastTouch,
+        daysInStage,
+        nextFollowUpAt: o.nextFollowUpAt,
+        now,
+      });
       const entry = {
         id: o.id,
         name: o.name,
@@ -98,8 +115,11 @@ export class OpportunityService {
         stage: o.stage,
         accountId: o.accountId,
         accountName: o.account.name,
-        daysSinceLastTouch: OpportunityService.daysSince(o.lastActivityAt, now),
-        daysInStage: OpportunityService.daysSince(o.lastStageChangedAt, now),
+        daysSinceLastTouch,
+        daysInStage,
+        healthScore: health.healthScore,
+        healthStatus: health.healthStatus,
+        healthSignals: health.healthSignals,
       };
       if (OpportunityService.PIPELINE_STAGES.includes(stage as (typeof OpportunityService.PIPELINE_STAGES)[number])) {
         result[stage].push(entry);
@@ -111,7 +131,17 @@ export class OpportunityService {
     return result;
   }
 
-  async findAll(query: QueryOpportunityDto): Promise<PaginatedResult<Opportunity>> {
+  async findAll(query: QueryOpportunityDto): Promise<
+    PaginatedResult<
+      Opportunity & {
+        daysSinceLastTouch: number | null;
+        daysInStage: number | null;
+        healthScore: number;
+        healthStatus: 'healthy' | 'warning' | 'critical';
+        healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+      }
+    >
+  > {
     const { page = 1, pageSize = 20, name, accountId, stage, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
     const where: Prisma.OpportunityWhereInput = {};
@@ -119,7 +149,7 @@ export class OpportunityService {
     if (stage) where.stage = stage;
     if (name) where.name = { contains: name, mode: 'insensitive' };
 
-    const [data, total] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.opportunity.findMany({
         where,
         orderBy: { [sortBy]: sortDir },
@@ -129,13 +159,92 @@ export class OpportunityService {
       this.prisma.opportunity.count({ where }),
     ]);
 
-    return { data, page, pageSize, total };
+    const now = new Date();
+    const data = rows.map((o) => {
+      const daysSinceLastTouch = OpportunityService.daysSince(o.lastActivityAt, now);
+      const daysInStage = OpportunityService.daysSince(o.lastStageChangedAt, now);
+      const health = computeHealthScore({
+        stage: o.stage,
+        daysSinceLastTouch,
+        daysInStage,
+        nextFollowUpAt: o.nextFollowUpAt,
+        now,
+      });
+      return {
+        ...o,
+        daysSinceLastTouch,
+        daysInStage,
+        healthScore: health.healthScore,
+        healthStatus: health.healthStatus,
+        healthSignals: health.healthSignals,
+      };
+    });
+
+    type WithWorkflow = Opportunity & {
+      daysSinceLastTouch: number | null;
+      daysInStage: number | null;
+      healthScore: number;
+      healthStatus: 'healthy' | 'warning' | 'critical';
+      healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+    };
+    return { data, page, pageSize, total } as PaginatedResult<WithWorkflow>;
   }
 
-  async findOne(id: string): Promise<Opportunity> {
-    const opportunity = await this.prisma.opportunity.findUnique({ where: { id } });
+  async findOne(id: string): Promise<
+    Opportunity & {
+      daysSinceLastTouch: number | null;
+      daysInStage: number | null;
+      healthScore: number;
+      healthStatus: 'healthy' | 'warning' | 'critical';
+      healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+    }
+  > {
+    const opportunity = await this.prisma.opportunity.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        accountId: true,
+        name: true,
+        amount: true,
+        stage: true,
+        probability: true,
+        closeDate: true,
+        sourceLeadId: true,
+        lastActivityAt: true,
+        lastStageChangedAt: true,
+        nextFollowUpAt: true,
+        healthScore: true,
+        healthSignals: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
     if (!opportunity) throw new NotFoundException(`Opportunity ${id} not found`);
-    return opportunity;
+    const now = new Date();
+    const daysSinceLastTouch = OpportunityService.daysSince(opportunity.lastActivityAt, now);
+    const daysInStage = OpportunityService.daysSince(opportunity.lastStageChangedAt, now);
+    const health = computeHealthScore({
+      stage: opportunity.stage,
+      daysSinceLastTouch,
+      daysInStage,
+      nextFollowUpAt: opportunity.nextFollowUpAt,
+      now,
+    });
+    const result = {
+      ...opportunity,
+      daysSinceLastTouch,
+      daysInStage,
+      healthScore: health.healthScore,
+      healthStatus: health.healthStatus,
+      healthSignals: health.healthSignals,
+    };
+    return result as Opportunity & {
+      daysSinceLastTouch: number | null;
+      daysInStage: number | null;
+      healthScore: number;
+      healthStatus: 'healthy' | 'warning' | 'critical';
+      healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+    };
   }
 
   async update(id: string, dto: UpdateOpportunityDto): Promise<Opportunity> {

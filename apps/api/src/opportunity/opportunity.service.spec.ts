@@ -153,6 +153,7 @@ describe('OpportunityService', () => {
           accountId: 'acc-1',
           lastActivityAt,
           lastStageChangedAt,
+          nextFollowUpAt: new Date('2025-02-20'),
           account: { name: 'Acme' },
         },
       ]);
@@ -175,6 +176,7 @@ describe('OpportunityService', () => {
           accountId: 'acc-1',
           lastActivityAt: null,
           lastStageChangedAt: null,
+          nextFollowUpAt: null,
           account: { name: 'Acme' },
         },
       ]);
@@ -198,6 +200,7 @@ describe('OpportunityService', () => {
           accountId: 'acc-1',
           lastActivityAt,
           lastStageChangedAt: null,
+          nextFollowUpAt: null,
           account: { name: 'Acme' },
         },
       ]);
@@ -220,6 +223,7 @@ describe('OpportunityService', () => {
           accountId: 'acc-2',
           lastActivityAt: null,
           lastStageChangedAt: null,
+          nextFollowUpAt: null,
           account: { name: 'Beta' },
         },
       ]);
@@ -237,6 +241,10 @@ describe('OpportunityService', () => {
       expect(entry.accountName).toBe('Beta');
       expect(entry).toHaveProperty('daysSinceLastTouch');
       expect(entry).toHaveProperty('daysInStage');
+      expect(entry).toHaveProperty('healthScore');
+      expect(entry).toHaveProperty('healthStatus');
+      expect(entry).toHaveProperty('healthSignals');
+      expect(Array.isArray(entry.healthSignals)).toBe(true);
     });
 
     it('uses single findMany (no per-opportunity queries)', async () => {
@@ -255,6 +263,7 @@ describe('OpportunityService', () => {
           accountId: true,
           lastActivityAt: true,
           lastStageChangedAt: true,
+          nextFollowUpAt: true,
           account: { select: { name: true } },
         }),
       });

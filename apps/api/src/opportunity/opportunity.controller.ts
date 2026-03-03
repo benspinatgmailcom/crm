@@ -28,7 +28,7 @@ export class OpportunityController {
   @Get('pipeline')
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
   @ApiOperation({ summary: 'Get opportunities grouped by stage for pipeline/Kanban view' })
-  @ApiResponse({ status: 200, description: 'Returns { [stage]: [{ id, name, amount, closeDate, stage, accountId, accountName, daysSinceLastTouch, daysInStage }] }' })
+  @ApiResponse({ status: 200, description: 'Returns { [stage]: [{ id, name, amount, closeDate, stage, accountId, accountName, daysSinceLastTouch, daysInStage, healthScore, healthStatus, healthSignals }] }' })
   getPipeline(): Promise<Record<string, Array<{
     id: string;
     name: string;
@@ -39,6 +39,9 @@ export class OpportunityController {
     accountName: string;
     daysSinceLastTouch: number | null;
     daysInStage: number | null;
+    healthScore: number;
+    healthStatus: 'healthy' | 'warning' | 'critical';
+    healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
   }>>> {
     return this.opportunityService.getPipeline();
   }
