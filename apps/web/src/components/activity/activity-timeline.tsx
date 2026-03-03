@@ -389,8 +389,23 @@ function ActivityItem({ activity }: { activity: Activity }) {
           </div>
         );
       }
-      default:
+      default: {
+        // Fallback for follow-up/task types when metadata is present but switch didn't match (e.g. production cache)
+        const followupTaskTypes = ["followup_suggested", "task_created", "task_completed", "task_dismissed", "task_snoozed"];
+        if (followupTaskTypes.includes(type) && m && typeof m === "object") {
+          const title = m.title != null ? String(m.title) : type === "followup_suggested" ? "Follow-up suggested" : type === "task_created" ? "Task" : type.replace(/_/g, " ");
+          const desc = m.description != null ? String(m.description) : null;
+          const due = m.suggestedDueAt != null || m.dueAt != null ? (m.suggestedDueAt ?? m.dueAt) as string : null;
+          return (
+            <div className="space-y-1 text-sm">
+              <p className="font-medium text-gray-900">{title}</p>
+              {desc && <p className="text-gray-700">{desc}</p>}
+              {due && <span className="text-gray-500 text-xs">Due: {new Date(due).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>}
+            </div>
+          );
+        }
         return <p className="text-sm text-gray-500">{JSON.stringify(p)}</p>;
+      }
     }
   };
 

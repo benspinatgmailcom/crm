@@ -85,6 +85,16 @@ export class ActivityService {
         orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        select: {
+          id: true,
+          entityType: true,
+          entityId: true,
+          type: true,
+          payload: true,
+          metadata: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       }),
       this.prisma.activity.count({ where }),
     ]);
@@ -95,9 +105,19 @@ export class ActivityService {
   async findOne(id: string): Promise<Activity> {
     const activity = await this.prisma.activity.findFirst({
       where: { id, deletedAt: null },
+      select: {
+        id: true,
+        entityType: true,
+        entityId: true,
+        type: true,
+        payload: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
     if (!activity) throw new NotFoundException(`Activity ${id} not found`);
-    return activity;
+    return activity as Activity;
   }
 
   async update(id: string, dto: UpdateActivityDto): Promise<Activity> {
