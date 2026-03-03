@@ -20,6 +20,11 @@ export const ALL_ACTIVITY_TYPES = [
   "file_uploaded",
   "file_deleted",
   "stage_change",
+  "followup_suggested",
+  "task_created",
+  "task_completed",
+  "task_dismissed",
+  "task_snoozed",
 ] as const;
 export type ActivityType = (typeof ALL_ACTIVITY_TYPES)[number];
 
@@ -34,4 +39,9 @@ export const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   file_uploaded: "File Uploaded",
   file_deleted: "File Deleted",
   stage_change: "Stage Change",
+  followup_suggested: "Follow-up suggested",
+  task_created: "Task created",
+  task_completed: "Task completed",
+  task_dismissed: "Task dismissed",
+  task_snoozed: "Task snoozed",
 };
