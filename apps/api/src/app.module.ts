@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +15,7 @@ import { ContactModule } from './contact/contact.module';
 import { LeadModule } from './lead/lead.module';
 import { OpportunityModule } from './opportunity/opportunity.module';
 import { ActivityModule } from './activity/activity.module';
+import { FollowUpModule } from './followup-engine/followup.module';
 import { AiModule } from './ai/ai.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { EmailModule } from './email/email.module';
@@ -26,6 +28,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 @Module({
   imports: [
     PrismaModule,
+    ScheduleModule.forRoot(),
     AuthModule,
     SearchModule,
     AccountModule,
@@ -33,6 +36,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
     LeadModule,
     OpportunityModule,
     ActivityModule,
+    FollowUpModule,
     AiModule,
     AttachmentsModule,
     EmailModule,

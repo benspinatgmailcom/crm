@@ -5,6 +5,7 @@ import { PaginatedResult } from '../common/pagination.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { OpportunityService } from './opportunity.service';
+import { FollowUpService } from '../followup-engine/followup.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { QueryOpportunityDto } from './dto/query-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
@@ -13,7 +14,10 @@ import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
 @Controller('opportunities')
 @ApiBearerAuth()
 export class OpportunityController {
-  constructor(private readonly opportunityService: OpportunityService) {}
+  constructor(
+    private readonly opportunityService: OpportunityService,
+    private readonly followUpService: FollowUpService,
+  ) {}
 
   @Post()
   @Roles(Role.ADMIN, Role.USER)
@@ -55,6 +59,14 @@ export class OpportunityController {
   @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
   findAll(@Query() query: QueryOpportunityDto): Promise<PaginatedResult<Opportunity>> {
     return this.opportunityService.findAll(query);
+  }
+
+  @Get(':id/followups')
+  @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
+  @ApiOperation({ summary: 'List follow-up suggestions and open tasks for an opportunity' })
+  @ApiResponse({ status: 200, description: 'Returns { suggestions, openTasks }' })
+  listFollowups(@Param('id') id: string) {
+    return this.followUpService.listOpportunityFollowups(id);
   }
 
   @Get(':id')

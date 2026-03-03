@@ -15,6 +15,12 @@ interface SeedStoryResult {
   storyAccountIds: { apexId: string; northwindId: string; globexId: string };
 }
 
+interface FollowupGenerateResult {
+  created: number;
+  skipped: number;
+  errors: number;
+}
+
 export default function DevPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -30,6 +36,10 @@ export default function DevPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SeedStoryResult | null>(null);
+
+  const [followupLoading, setFollowupLoading] = useState(false);
+  const [followupError, setFollowupError] = useState<string | null>(null);
+  const [followupResult, setFollowupResult] = useState<FollowupGenerateResult | null>(null);
 
   const handleSeed = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,6 +66,23 @@ export default function DevPage() {
 
   const openAccount = (id: string) => {
     router.push(`/accounts/${id}`);
+  };
+
+  const handleRunFollowupEngine = async () => {
+    setFollowupError(null);
+    setFollowupResult(null);
+    setFollowupLoading(true);
+    try {
+      const res = await apiFetch<FollowupGenerateResult>("/followups/generate", {
+        method: "POST",
+      });
+      setFollowupResult(res);
+    } catch (err: unknown) {
+      const e = err as { body?: { message?: string }; message?: string };
+      setFollowupError(e.body?.message ?? e.message ?? "Follow-up generation failed");
+    } finally {
+      setFollowupLoading(false);
+    }
   };
 
   if (user && !isAdmin(user.role)) {
@@ -124,6 +151,36 @@ export default function DevPage() {
           {loading ? "Seeding…" : "Generate Story Demo Data"}
         </button>
       </form>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm space-y-4">
+        <h2 className="text-lg font-medium text-gray-900">Follow-up suggestion engine</h2>
+        <p className="text-sm text-gray-500">
+          Run the follow-up engine manually to generate suggestions for open opportunities. Normally runs daily at 8am.
+        </p>
+        {followupError && (
+          <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {followupError}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={handleRunFollowupEngine}
+          disabled={followupLoading}
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {followupLoading ? "Running…" : "Run follow-up engine now"}
+        </button>
+        {followupResult && (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <dt className="text-gray-500">Created</dt>
+            <dd className="font-medium">{followupResult.created}</dd>
+            <dt className="text-gray-500">Skipped</dt>
+            <dd className="font-medium">{followupResult.skipped}</dd>
+            <dt className="text-gray-500">Errors</dt>
+            <dd className="font-medium">{followupResult.errors}</dd>
+          </dl>
+        )}
+      </div>
 
       {result && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm space-y-4">

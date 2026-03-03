@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity } from "lucide-react";
+import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, Check, X } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
@@ -53,6 +53,37 @@ interface Contact {
   email: string;
 }
 
+interface FollowupSuggestion {
+  id: string;
+  metadata: {
+    ruleCode: string;
+    title: string;
+    description: string;
+    suggestedDueAt: string;
+    severity: "warning" | "critical";
+    reasonCodes: string[];
+  };
+  createdAt: string;
+}
+
+interface OpenTask {
+  id: string;
+  metadata: {
+    title: string;
+    description: string;
+    dueAt: string;
+    priority: string;
+    status: string;
+  };
+  createdAt: string;
+  snoozedUntil?: string;
+}
+
+interface FollowupsResponse {
+  suggestions: FollowupSuggestion[];
+  openTasks: OpenTask[];
+}
+
 const STAGE_OPTIONS = ["prospecting", "discovery", "qualification", "proposal", "negotiation", "closed-won", "closed-lost"];
 
 function formatAmount(amount: { toString(): string } | null): string {
@@ -89,6 +120,10 @@ export default function OpportunityDetailPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [followups, setFollowups] = useState<FollowupsResponse | null>(null);
+  const [followupsLoading, setFollowupsLoading] = useState(false);
+  const [followupActionId, setFollowupActionId] = useState<string | null>(null);
 
   const fetchOpportunity = useCallback(async () => {
     if (!id) return;
@@ -133,10 +168,69 @@ export default function OpportunityDetailPage() {
     }
   }, []);
 
+  const fetchFollowups = useCallback(async (opportunityId: string) => {
+    setFollowupsLoading(true);
+    try {
+      const res = await apiFetch<FollowupsResponse>(`/opportunities/${opportunityId}/followups`);
+      setFollowups(res);
+    } catch {
+      setFollowups(null);
+    } finally {
+      setFollowupsLoading(false);
+    }
+  }, []);
+
+  const createTaskFromSuggestion = async (suggestionId: string) => {
+    setFollowupActionId(suggestionId);
+    try {
+      await apiFetch(`/followups/${suggestionId}/create-task`, { method: "POST" });
+      if (id) await fetchFollowups(id);
+    } finally {
+      setFollowupActionId(null);
+    }
+  };
+
+  const completeTask = async (taskActivityId: string) => {
+    setFollowupActionId(taskActivityId);
+    try {
+      await apiFetch(`/tasks/${taskActivityId}/complete`, { method: "POST" });
+      if (id) await fetchFollowups(id);
+    } finally {
+      setFollowupActionId(null);
+    }
+  };
+
+  const dismissTask = async (taskActivityId: string) => {
+    setFollowupActionId(taskActivityId);
+    try {
+      await apiFetch(`/tasks/${taskActivityId}/dismiss`, { method: "POST" });
+      if (id) await fetchFollowups(id);
+    } finally {
+      setFollowupActionId(null);
+    }
+  };
+
+  const snoozeTask = async (taskActivityId: string, until: string) => {
+    setFollowupActionId(taskActivityId);
+    try {
+      await apiFetch(`/tasks/${taskActivityId}/snooze`, {
+        method: "POST",
+        body: JSON.stringify({ until }),
+      });
+      if (id) await fetchFollowups(id);
+    } finally {
+      setFollowupActionId(null);
+    }
+  };
+
   useEffect(() => {
     fetchOpportunity();
     fetchAccounts();
   }, [fetchOpportunity, fetchAccounts]);
+
+  useEffect(() => {
+    if (id) fetchFollowups(id);
+  }, [id, fetchFollowups]);
 
   useEffect(() => {
     if (opportunity?.accountId) {
@@ -361,6 +455,136 @@ export default function OpportunityDetailPage() {
               </div>
             </div>
           )}
+
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <ListTodo className="h-4 w-4" />
+              Follow-ups
+            </h2>
+            {followupsLoading ? (
+              <p className="text-sm text-gray-500">Loading follow-ups...</p>
+            ) : followups && (followups.suggestions.length > 0 || followups.openTasks.length > 0) ? (
+              <div className="space-y-4">
+                {followups.suggestions.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Suggestions</h3>
+                    <ul className="space-y-3">
+                      {followups.suggestions.map((s) => (
+                        <li
+                          key={s.id}
+                          className="rounded-md border border-gray-200 bg-gray-50/50 p-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-gray-900">{s.metadata.title}</span>
+                            <span
+                              className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${
+                                s.metadata.severity === "critical"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-amber-100 text-amber-700"
+                              }`}
+                            >
+                              {s.metadata.severity}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">{s.metadata.description}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                            <span>Due: {new Date(s.metadata.suggestedDueAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>
+                            {s.metadata.reasonCodes?.length > 0 && (
+                              <span className="rounded bg-gray-200 px-1.5 py-0.5">
+                                {s.metadata.reasonCodes.join(", ")}
+                              </span>
+                            )}
+                          </div>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => createTaskFromSuggestion(s.id)}
+                              disabled={followupActionId === s.id}
+                              className="mt-2 rounded border border-accent-1 bg-white px-2 py-1 text-xs font-medium text-accent-1 hover:bg-accent-1/5 disabled:opacity-50"
+                            >
+                              {followupActionId === s.id ? "Creating…" : "Create task"}
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {followups.openTasks.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Open tasks</h3>
+                    <ul className="space-y-3">
+                      {followups.openTasks.map((t) => (
+                        <li
+                          key={t.id}
+                          className="rounded-md border border-gray-200 bg-white p-3 shadow-sm"
+                        >
+                          <div className="font-medium text-gray-900">{t.metadata.title}</div>
+                          {t.metadata.description && (
+                            <p className="mt-0.5 text-sm text-gray-600">{t.metadata.description}</p>
+                          )}
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                            <span>Due: {new Date(t.metadata.dueAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>
+                            {t.snoozedUntil && (
+                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">
+                                Snoozed until {new Date(t.snoozedUntil).toLocaleString(undefined, { dateStyle: "short" })}
+                              </span>
+                            )}
+                          </div>
+                          {canEdit && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              <button
+                                type="button"
+                                onClick={() => completeTask(t.id)}
+                                disabled={followupActionId === t.id}
+                                className="inline-flex items-center gap-1 rounded border border-emerald-600 bg-white px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                              >
+                                <Check className="h-3 w-3" />
+                                Complete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => dismissTask(t.id)}
+                                disabled={followupActionId === t.id}
+                                className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                <X className="h-3 w-3" />
+                                Dismiss
+                              </button>
+                              <select
+                                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700"
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.target.value = "";
+                                  if (v) {
+                                    const d = new Date();
+                                    if (v === "1d") d.setDate(d.getDate() + 1);
+                                    else if (v === "3d") d.setDate(d.getDate() + 3);
+                                    else if (v === "1w") d.setDate(d.getDate() + 7);
+                                    snoozeTask(t.id, d.toISOString());
+                                  }
+                                }}
+                                disabled={followupActionId === t.id}
+                              >
+                                <option value="">Snooze…</option>
+                                <option value="1d">1 day</option>
+                                <option value="3d">3 days</option>
+                                <option value="1w">1 week</option>
+                              </select>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No follow-up suggestions or open tasks. The engine runs daily to suggest next steps.</p>
+            )}
+          </div>
+
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-3 text-sm font-semibold text-gray-900">Opportunity details</h2>
             <dl className="space-y-2 text-sm">
