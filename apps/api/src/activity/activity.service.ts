@@ -94,6 +94,7 @@ export class ActivityService {
           metadata: true,
           createdAt: true,
           updatedAt: true,
+          deletedAt: true,
         },
       }),
       this.prisma.activity.count({ where }),
@@ -114,6 +115,7 @@ export class ActivityService {
         metadata: true,
         createdAt: true,
         updatedAt: true,
+        deletedAt: true,
       },
     });
     if (!activity) throw new NotFoundException(`Activity ${id} not found`);
