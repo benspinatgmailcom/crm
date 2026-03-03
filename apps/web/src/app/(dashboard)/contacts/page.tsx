@@ -9,6 +9,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { contactSchema, type ContactFormData } from "@/lib/validation";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 interface Contact {
   id: string;
@@ -288,33 +290,25 @@ export default function ContactsPage() {
                     <td className="px-4 py-3 text-sm text-gray-500">{contact.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{accountName(contact.accountId)}</td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-2">
-                        <button
+                      <div className="flex justify-end gap-1">
+                        <ActionIconButton
+                          icon={Eye}
+                          label="View"
                           onClick={() => router.push(`/contacts/${contact.id}`)}
-                          className="text-sm text-accent-1 hover:underline"
-                        >
-                          View
-                        </button>
+                        />
                         {canEdit && (
                         <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(contact);
-                          }}
-                          className="text-sm text-accent-1 hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteId(contact.id);
-                          }}
-                          className="text-sm text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
+                        <ActionIconButton
+                          icon={Pencil}
+                          label="Edit"
+                          onClick={() => openEdit(contact)}
+                        />
+                        <ActionIconButton
+                          icon={Trash2}
+                          label="Delete"
+                          variant="danger"
+                          onClick={() => setDeleteId(contact.id)}
+                        />
                         </>
                         )}
                       </div>

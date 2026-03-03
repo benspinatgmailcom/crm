@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Clock, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
+import { Clock, CheckCircle, AlertTriangle, XCircle, Pencil, Eye, Trash2 } from "lucide-react";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
 import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -384,12 +385,12 @@ export default function AccountDetailPage() {
           <h1 className="text-2xl font-semibold text-gray-900">{account.name}</h1>
           {canEdit && (
           <div className="flex flex-wrap gap-2">
-            <button
+            <ActionIconButton
+              icon={Pencil}
+              label="Edit Account"
               onClick={() => setEditAccountOpen(true)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Edit Account
-            </button>
+              className="rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            />
             <button
               onClick={openAddContact}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -434,9 +435,11 @@ export default function AccountDetailPage() {
                 <div>
                   <dt className="text-gray-500">Created from Lead</dt>
                   <dd className="text-gray-900">
-                    <Link href={`/leads/${account.sourceLeadId}`} className="text-accent-1 hover:underline">
-                      View lead
-                    </Link>
+                    <ActionIconButton
+                      icon={Eye}
+                      label="View lead"
+                      href={`/leads/${account.sourceLeadId}`}
+                    />
                   </dd>
                 </div>
               )}
@@ -477,10 +480,10 @@ export default function AccountDetailPage() {
                         <td className="px-4 py-3 text-sm text-gray-500">{c.email}</td>
                         <td className="px-4 py-3 text-right">
                           {canEdit && (
-                          <>
-                          <button onClick={() => openEditContact(c)} className="text-sm text-accent-1 hover:underline mr-2">Edit</button>
-                          <button onClick={() => setContactDeleteId(c.id)} className="text-sm text-red-600 hover:underline">Delete</button>
-                          </>
+                          <div className="flex justify-end gap-1">
+                          <ActionIconButton icon={Pencil} label="Edit" onClick={() => openEditContact(c)} />
+                          <ActionIconButton icon={Trash2} label="Delete" variant="danger" onClick={() => setContactDeleteId(c.id)} />
+                          </div>
                           )}
                         </td>
                       </tr>
@@ -535,10 +538,10 @@ export default function AccountDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           {canEdit && (
-                          <>
-                          <button onClick={() => openEditOpp(o)} className="text-sm text-accent-1 hover:underline mr-2">Edit</button>
-                          <button onClick={() => setOppDeleteId(o.id)} className="text-sm text-red-600 hover:underline">Delete</button>
-                          </>
+                          <div className="flex justify-end gap-1">
+                          <ActionIconButton icon={Pencil} label="Edit" onClick={() => openEditOpp(o)} />
+                          <ActionIconButton icon={Trash2} label="Delete" variant="danger" onClick={() => setOppDeleteId(o.id)} />
+                          </div>
                           )}
                         </td>
                       </tr>

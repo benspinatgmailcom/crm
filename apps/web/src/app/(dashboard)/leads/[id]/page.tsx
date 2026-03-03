@@ -6,6 +6,8 @@ import Link from "next/link";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Pencil, Eye } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
@@ -218,12 +220,12 @@ export default function LeadDetailPage() {
           </div>
           {canEdit && (
           <div className="flex flex-wrap gap-2">
-            <button
+            <ActionIconButton
+              icon={Pencil}
+              label="Edit Lead"
               onClick={openEdit}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Edit Lead
-            </button>
+              className="rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            />
           </div>
           )}
         </div>
@@ -268,39 +270,35 @@ export default function LeadDetailPage() {
                 <p className="text-gray-700">This lead has been converted.</p>
                 <div className="flex flex-wrap gap-2">
                   {lead.convertedAccountId && (
-                    <Link
+                    <ActionIconButton
+                      icon={Eye}
+                      label="View Account"
                       href={`/accounts/${lead.convertedAccountId}`}
-                      className="text-accent-1 hover:underline"
-                    >
-                      View Account
-                    </Link>
+                    />
                   )}
                   {lead.convertedContactId && (
-                    <Link
+                    <ActionIconButton
+                      icon={Eye}
+                      label="View Contact"
                       href={`/contacts/${lead.convertedContactId}`}
-                      className="text-accent-1 hover:underline"
-                    >
-                      View Contact
-                    </Link>
+                    />
                   )}
                   {lead.convertedOpportunityId && (
-                    <Link
+                    <ActionIconButton
+                      icon={Eye}
+                      label="View Opportunity"
                       href={`/opportunities/${lead.convertedOpportunityId}`}
-                      className="text-accent-1 hover:underline"
-                    >
-                      View Opportunity
-                    </Link>
+                    />
                   )}
                 </div>
-                <p className="text-gray-600">
-                  Initial task created: <strong>Schedule discovery call</strong> —{" "}
+                <p className="text-gray-600 flex items-center gap-1 flex-wrap">
+                  Initial task created: <strong>Schedule discovery call</strong> —
                   {lead.convertedOpportunityId && (
-                    <Link
+                    <ActionIconButton
+                      icon={Eye}
+                      label="View on Opportunity timeline"
                       href={`/opportunities/${lead.convertedOpportunityId}`}
-                      className="text-accent-1 hover:underline"
-                    >
-                      View on Opportunity timeline
-                    </Link>
+                    />
                   )}
                 </p>
               </div>

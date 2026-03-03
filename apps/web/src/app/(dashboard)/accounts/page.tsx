@@ -9,6 +9,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { accountSchema, type AccountFormData } from "@/lib/validation";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
+import { ActionIconButton } from "@/components/ui/action-icon-button";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 
 interface Account {
   id: string;
@@ -219,33 +221,25 @@ export default function AccountsPage() {
                     <td className="px-4 py-3 text-sm text-gray-500">{account.industry ?? "—"}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{account.website ?? "—"}</td>
                     <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-2">
-                        <button
+                      <div className="flex justify-end gap-1">
+                        <ActionIconButton
+                          icon={Eye}
+                          label="View"
                           onClick={() => router.push(`/accounts/${account.id}`)}
-                          className="text-sm text-accent-1 hover:underline"
-                        >
-                          View
-                        </button>
+                        />
                         {canEdit && (
                         <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(account);
-                          }}
-                          className="text-sm text-accent-1 hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteId(account.id);
-                          }}
-                          className="text-sm text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
+                        <ActionIconButton
+                          icon={Pencil}
+                          label="Edit"
+                          onClick={() => openEdit(account)}
+                        />
+                        <ActionIconButton
+                          icon={Trash2}
+                          label="Delete"
+                          variant="danger"
+                          onClick={() => setDeleteId(account.id)}
+                        />
                         </>
                         )}
                       </div>

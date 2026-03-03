@@ -460,6 +460,7 @@ function DraggableCard({
         }}
         className="absolute right-2 top-2 rounded p-1 opacity-0 transition-opacity hover:bg-gray-100 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-accent-1"
         aria-label="Edit"
+        title="Edit"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
