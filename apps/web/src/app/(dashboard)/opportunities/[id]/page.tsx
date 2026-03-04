@@ -557,7 +557,7 @@ export default function OpportunityDetailPage() {
             </div>
           )}
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div id="followups" className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm scroll-mt-4">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
               <ListTodo className="h-4 w-4" />
               Follow-ups
