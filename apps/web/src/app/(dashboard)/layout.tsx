@@ -12,6 +12,7 @@ import {
   Target,
   Briefcase,
   Wrench,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { isAdmin } from "@/lib/roles";
@@ -32,6 +33,7 @@ const navItems: Array<{
   { href: "/contacts", label: "Contacts", icon: Contact },
   { href: "/leads", label: "Leads", icon: Target },
   { href: "/opportunities", label: "Opportunities", icon: Briefcase },
+  { href: "/health", label: "Pipeline Health", icon: Activity },
   { href: "/reports", label: "Reports", icon: BarChart },
   { href: "/settings/users", label: "Settings", icon: Settings, adminOnly: true },
 ];

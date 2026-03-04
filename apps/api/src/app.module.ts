@@ -22,6 +22,7 @@ import { EmailModule } from './email/email.module';
 import { MetabaseModule } from './metabase/metabase.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -42,6 +43,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
     EmailModule,
     MetabaseModule,
     UsersModule,
+    DashboardModule,
     DevModule,
   ],
   controllers: [AppController, HealthController, ProbesController],

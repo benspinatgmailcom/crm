@@ -7,9 +7,11 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /** Optional class for the dialog box (e.g. max-w-[70vw] for width) */
+  contentClassName?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, contentClassName }: ModalProps) {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -34,7 +36,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
         aria-hidden
       />
       <div
-        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-auto rounded-lg bg-white shadow-xl"
+        className={`relative z-10 w-full max-h-[90vh] overflow-auto rounded-lg bg-white shadow-xl ${contentClassName ?? "max-w-lg"}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
