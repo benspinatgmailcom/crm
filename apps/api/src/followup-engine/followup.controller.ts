@@ -3,13 +3,19 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { FollowUpService } from './followup.service';
+import { FollowUpDraftService } from './draft/followup-draft.service';
 import { SnoozeTaskDto } from './dto/snooze-task.dto';
+import { CreateDraftDto } from './draft/dto/create-draft.dto';
+import { MarkDraftSentDto } from './draft/dto/mark-sent.dto';
 
 @ApiTags('Follow-ups')
 @Controller()
 @ApiBearerAuth()
 export class FollowUpController {
-  constructor(private readonly followUpService: FollowUpService) {}
+  constructor(
+    private readonly followUpService: FollowUpService,
+    private readonly draftService: FollowUpDraftService,
+  ) {}
 
   @Post('followups/generate')
   @Roles(Role.ADMIN)
@@ -17,6 +23,18 @@ export class FollowUpController {
   @ApiResponse({ status: 201, description: 'Returns { created, skipped, errors }' })
   async runGenerate(): Promise<{ created: number; skipped: number; errors: number }> {
     return this.followUpService.generateSuggestionsForOpenOpportunities();
+  }
+
+  @Post('followups/:suggestionId/draft')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Generate AI draft follow-up from a suggestion' })
+  @ApiResponse({ status: 201, description: 'Draft created' })
+  @ApiResponse({ status: 404, description: 'Suggestion not found' })
+  createDraftFromSuggestion(
+    @Param('suggestionId') suggestionId: string,
+    @Body() dto: CreateDraftDto,
+  ) {
+    return this.draftService.generateDraftFromSuggestion(suggestionId, dto);
   }
 
   @Post('followups/:suggestionId/create-task')
@@ -27,6 +45,18 @@ export class FollowUpController {
   @ApiResponse({ status: 404, description: 'Suggestion not found' })
   createTaskFromSuggestion(@Param('suggestionId') suggestionId: string) {
     return this.followUpService.createTaskFromSuggestion(suggestionId);
+  }
+
+  @Post('tasks/:taskActivityId/draft')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Generate AI draft follow-up from an open task' })
+  @ApiResponse({ status: 201, description: 'Draft created' })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  createDraftFromTask(
+    @Param('taskActivityId') taskActivityId: string,
+    @Body() dto: CreateDraftDto,
+  ) {
+    return this.draftService.generateDraftFromTask(taskActivityId, dto);
   }
 
   @Post('tasks/:taskActivityId/complete')
@@ -62,6 +92,20 @@ export class FollowUpController {
     @Body() dto: SnoozeTaskDto,
   ): Promise<{ ok: true }> {
     await this.followUpService.snoozeTask(taskActivityId, new Date(dto.until));
+    return { ok: true };
+  }
+
+  @Post('drafts/:draftActivityId/mark-sent')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Mark a draft as sent (records followup_sent, updates lastActivityAt)' })
+  @ApiResponse({ status: 201, description: 'Marked as sent' })
+  @ApiResponse({ status: 400, description: 'Draft not in DRAFT status' })
+  @ApiResponse({ status: 404, description: 'Draft not found' })
+  async markDraftSent(
+    @Param('draftActivityId') draftActivityId: string,
+    @Body() dto: MarkDraftSentDto,
+  ): Promise<{ ok: true }> {
+    await this.draftService.markDraftSent(draftActivityId, { channel: dto.channel, notes: dto.notes });
     return { ok: true };
   }
 }

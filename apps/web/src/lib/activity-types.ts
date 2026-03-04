@@ -25,6 +25,8 @@ export const ALL_ACTIVITY_TYPES = [
   "task_completed",
   "task_dismissed",
   "task_snoozed",
+  "followup_draft_created",
+  "followup_sent",
 ] as const;
 export type ActivityType = (typeof ALL_ACTIVITY_TYPES)[number];
 
@@ -44,4 +46,6 @@ export const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   task_completed: "Task completed",
   task_dismissed: "Task dismissed",
   task_snoozed: "Task snoozed",
+  followup_draft_created: "Follow-up draft",
+  followup_sent: "Follow-up sent",
 };
