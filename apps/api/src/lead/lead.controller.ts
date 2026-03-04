@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Lead } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { LeadService } from './lead.service';
@@ -43,8 +44,12 @@ export class LeadController {
   @ApiResponse({ status: 201, description: 'Lead converted successfully' })
   @ApiResponse({ status: 400, description: 'Lead already converted' })
   @ApiResponse({ status: 404, description: 'Lead not found' })
-  convert(@Param('id') id: string, @Body() dto?: ConvertLeadDto) {
-    return this.leadService.convert(id, dto);
+  convert(
+    @Param('id') id: string,
+    @Body() dto: ConvertLeadDto | undefined,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.leadService.convert(id, dto, userId);
   }
 
   @Get(':id')

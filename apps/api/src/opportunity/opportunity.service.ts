@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Opportunity, Prisma } from '@crm/db';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
+import { Opportunity, Prisma, User } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
 import { ActivityService } from '../activity/activity.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { Role } from '../auth/constants';
 import { computeHealthScore } from './health-scoring';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { QueryOpportunityDto } from './dto/query-opportunity.dto';
@@ -15,9 +21,22 @@ export class OpportunityService {
     private readonly activityService: ActivityService,
   ) {}
 
-  async create(dto: CreateOpportunityDto): Promise<Opportunity> {
+  async create(dto: CreateOpportunityDto, currentUser: User): Promise<Opportunity> {
     const account = await this.prisma.account.findUnique({ where: { id: dto.accountId } });
     if (!account) throw new NotFoundException(`Account ${dto.accountId} not found`);
+
+    const isAdmin = currentUser.role === Role.ADMIN;
+    const ownerId = dto.ownerId ?? currentUser.id;
+    if (!isAdmin && dto.ownerId != null && dto.ownerId !== currentUser.id) {
+      throw new ForbiddenException('Only admins can set opportunity owner to another user');
+    }
+
+    const owner = await this.prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { id: true, isActive: true },
+    });
+    if (!owner) throw new NotFoundException(`User ${ownerId} not found`);
+    if (!owner.isActive) throw new BadRequestException('Cannot assign opportunity to an inactive user');
 
     return await this.prisma.opportunity.create({
       data: {
@@ -27,6 +46,7 @@ export class OpportunityService {
         stage: dto.stage ?? 'prospecting',
         probability: dto.probability,
         closeDate: dto.closeDate ? new Date(dto.closeDate) : undefined,
+        ownerId,
       },
     });
   }
@@ -47,7 +67,10 @@ export class OpportunityService {
     return Math.floor((ref.getTime() - date.getTime()) / 86400000);
   }
 
-  async getPipeline(): Promise<Record<string, Array<{
+  async getPipeline(
+    currentUser: User,
+    ownerFilter?: string,
+  ): Promise<Record<string, Array<{
     id: string;
     name: string;
     amount: { toString(): string } | null;
@@ -55,13 +78,30 @@ export class OpportunityService {
     stage: string | null;
     accountId: string;
     accountName: string;
+    ownerId: string;
+    ownerEmail: string;
     daysSinceLastTouch: number | null;
     daysInStage: number | null;
     healthScore: number;
     healthStatus: 'healthy' | 'warning' | 'critical';
     healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
   }>>> {
+    const isAdmin = currentUser.role === Role.ADMIN;
+    const ownerWhere: Prisma.OpportunityWhereInput = {};
+    const raw = ownerFilter?.toLowerCase();
+    if (raw === 'me' || (!raw && !isAdmin)) {
+      ownerWhere.ownerId = currentUser.id;
+    } else if (raw === 'all' && isAdmin) {
+      // no filter
+    } else if (raw && raw !== 'all') {
+      if (raw !== currentUser.id && !isAdmin) {
+        throw new ForbiddenException('Only admins can filter pipeline by another user');
+      }
+      ownerWhere.ownerId = raw;
+    }
+
     const opportunities = await this.prisma.opportunity.findMany({
+      where: ownerWhere,
       select: {
         id: true,
         name: true,
@@ -69,10 +109,12 @@ export class OpportunityService {
         closeDate: true,
         stage: true,
         accountId: true,
+        ownerId: true,
         lastActivityAt: true,
         lastStageChangedAt: true,
         nextFollowUpAt: true,
         account: { select: { name: true } },
+        owner: { select: { email: true } },
       },
     });
 
@@ -85,6 +127,8 @@ export class OpportunityService {
       stage: string | null;
       accountId: string;
       accountName: string;
+      ownerId: string;
+      ownerEmail: string;
       daysSinceLastTouch: number | null;
       daysInStage: number | null;
       healthScore: number;
@@ -115,6 +159,8 @@ export class OpportunityService {
         stage: o.stage,
         accountId: o.accountId,
         accountName: o.account.name,
+        ownerId: o.ownerId,
+        ownerEmail: o.owner.email,
         daysSinceLastTouch,
         daysInStage,
         healthScore: health.healthScore,
@@ -210,6 +256,7 @@ export class OpportunityService {
         probability: true,
         closeDate: true,
         sourceLeadId: true,
+        ownerId: true,
         lastActivityAt: true,
         lastStageChangedAt: true,
         nextFollowUpAt: true,
@@ -217,6 +264,7 @@ export class OpportunityService {
         healthSignals: true,
         createdAt: true,
         updatedAt: true,
+        owner: { select: { id: true, email: true } },
       },
     });
     if (!opportunity) throw new NotFoundException(`Opportunity ${id} not found`);
@@ -238,7 +286,7 @@ export class OpportunityService {
       healthStatus: health.healthStatus,
       healthSignals: health.healthSignals,
     };
-    return result as Opportunity & {
+    return result as unknown as Opportunity & {
       daysSinceLastTouch: number | null;
       daysInStage: number | null;
       healthScore: number;
@@ -247,24 +295,46 @@ export class OpportunityService {
     };
   }
 
-  async update(id: string, dto: UpdateOpportunityDto): Promise<Opportunity> {
+  async update(id: string, dto: UpdateOpportunityDto, currentUser: User): Promise<Opportunity> {
     const current = await this.prisma.opportunity.findUnique({ where: { id } });
     if (!current) throw new NotFoundException(`Opportunity ${id} not found`);
+
+    const isAdmin = currentUser.role === Role.ADMIN;
+    const isOwner = current.ownerId === currentUser.id;
+
+    if (dto.ownerId !== undefined) {
+      if (!isAdmin && !isOwner) {
+        throw new ForbiddenException('Only the owner or an admin can reassign this opportunity');
+      }
+      if (!isAdmin && dto.ownerId !== currentUser.id) {
+        throw new ForbiddenException('Only admins can assign an opportunity to another user');
+      }
+      const newOwner = await this.prisma.user.findUnique({
+        where: { id: dto.ownerId },
+        select: { id: true, isActive: true },
+      });
+      if (!newOwner) throw new NotFoundException(`User ${dto.ownerId} not found`);
+      if (!newOwner.isActive) throw new BadRequestException('Cannot assign opportunity to an inactive user');
+    }
 
     const stageChanged =
       dto.stage !== undefined && dto.stage !== current.stage;
     const now = new Date();
 
+    const { ownerId, ...restDto } = dto;
+    const updateData: Prisma.OpportunityUpdateInput = {
+      ...restDto,
+      amount: dto.amount !== undefined ? dto.amount : undefined,
+      closeDate: dto.closeDate !== undefined ? (dto.closeDate ? new Date(dto.closeDate) : null) : undefined,
+      ...(stageChanged && {
+        lastStageChangedAt: now,
+      }),
+    };
+    if (ownerId !== undefined) updateData.owner = { connect: { id: ownerId } };
+
     const updated = await this.prisma.opportunity.update({
       where: { id },
-      data: {
-        ...dto,
-        amount: dto.amount !== undefined ? dto.amount : undefined,
-        closeDate: dto.closeDate !== undefined ? (dto.closeDate ? new Date(dto.closeDate) : null) : undefined,
-        ...(stageChanged && {
-          lastStageChangedAt: now,
-        }),
-      },
+      data: updateData,
     });
 
     if (stageChanged) {

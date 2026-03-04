@@ -17,7 +17,7 @@ export class DevService {
     await this.prisma.user.deleteMany();
 
     const passwordHash = await bcrypt.hash('Admin123!', 12);
-    await this.prisma.user.create({
+    const adminUser = await this.prisma.user.create({
       data: {
         email: 'admin@example.com',
         passwordHash,
@@ -91,6 +91,7 @@ export class DevService {
           stage: 'proposal',
           probability: 75,
           closeDate: new Date('2025-03-31'),
+          ownerId: adminUser.id,
         },
       }),
       this.prisma.opportunity.create({
@@ -101,6 +102,7 @@ export class DevService {
           stage: 'discovery',
           probability: 50,
           closeDate: new Date('2025-04-15'),
+          ownerId: adminUser.id,
         },
       }),
     ]);

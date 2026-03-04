@@ -34,4 +34,10 @@ export class CreateOpportunityDto {
   @IsOptional()
   @IsDateString()
   closeDate?: string;
+
+  /** Set owner (ADMIN only). If omitted, creator is set as owner. */
+  @ApiPropertyOptional({ description: 'Owner user ID (ADMIN only); defaults to current user' })
+  @IsOptional()
+  @IsString()
+  ownerId?: string;
 }
