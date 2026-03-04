@@ -167,7 +167,7 @@ export class SeedStoryService {
       { name: 'Apex Renewal FY26', stage: 'negotiation', amount: 1_200_000, closeDaysOut: 21, lastActivityAtDaysAgo: 2, lastStageChangedAtDaysAgo: 3 },
       { name: 'Edge Expansion Phase 1', stage: 'proposal', amount: 450_000, closeDaysOut: 45, lastActivityAtDaysAgo: 8, lastStageChangedAtDaysAgo: 15 }, // stale
       { name: 'Disaster Recovery Add-on', stage: 'qualification', amount: 180_000, closeDaysOut: 60, lastActivityAtDaysAgo: 5, lastStageChangedAtDaysAgo: 12 }, // at-risk
-    ], reset, (n) => { opportunitiesCreated += n; });
+    ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
 
     await this.seedApexActivities(apexId, apexContacts, apexOpps, reset, (n) => { activitiesCreated += n; });
     const apexAttachmentCount = await this.seedApexAttachments(apexId, user, reset);
@@ -199,7 +199,7 @@ export class SeedStoryService {
     await this.ensureOpportunities(northwindId, [
       { name: 'Core Network Modernization', stage: 'proposal', amount: 650_000, closeDaysOut: 30, lastActivityAtDaysAgo: 6, lastStageChangedAtDaysAgo: 13 }, // at-risk
       { name: 'Long-haul Fiber Connectivity', stage: 'qualification', amount: 300_000, closeDaysOut: 75, lastActivityAtDaysAgo: 10, lastStageChangedAtDaysAgo: 16 }, // stale
-    ], reset, (n) => { opportunitiesCreated += n; });
+    ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
 
     await this.seedNorthwindActivities(northwindId, northwindContacts, reset, (n) => { activitiesCreated += n; });
     const northwindAttachmentCount = await this.seedNorthwindAttachments(northwindId, user, reset);
@@ -229,7 +229,7 @@ export class SeedStoryService {
 
     await this.ensureOpportunities(globexId, [
       { name: 'ERP Integration Modernization', stage: 'qualification', amount: 250_000, closeDaysOut: 90, lastActivityAtDaysAgo: 20, lastStageChangedAtDaysAgo: 25 }, // stale
-    ], reset, (n) => { opportunitiesCreated += n; });
+    ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
 
     await this.seedGlobexActivities(globexId, globexContacts, reset, (n) => { activitiesCreated += n; });
     const globexAttachmentCount = await this.seedGlobexAttachments(globexId, user, reset);
@@ -295,6 +295,7 @@ export class SeedStoryService {
     }>,
     reset: boolean,
     onCreated: (n: number) => void,
+    ownerId: string,
   ): Promise<Array<{ id: string; name: string }>> {
     const today = new Date();
     let existing = await this.prisma.opportunity.findMany({ where: { accountId } });
@@ -315,6 +316,7 @@ export class SeedStoryService {
             closeDate,
             lastActivityAt,
             lastStageChangedAt,
+            ownerId,
           },
         });
       }
@@ -606,6 +608,7 @@ export class SeedStoryService {
             closeDate,
             lastActivityAt,
             lastStageChangedAt,
+            ownerId: user.id,
           },
         });
         opportunitiesCreated++;

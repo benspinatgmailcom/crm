@@ -66,6 +66,8 @@ pnpm db:studio  # Prisma Studio UI
 
 **Production:** apply migrations with `prisma migrate deploy` (e.g. in CI or release pipeline). See [docs/database-migrations.md](docs/database-migrations.md).
 
+**Opportunity owner migration (`20260312000000_add_opportunity_owner`):** Adds required `ownerId` to Opportunity. Backfill assigns existing rows to the oldest active ADMIN (by createdAt), or the oldest user if no ADMIN exists. If there are no users, the migration fails with instructions to create a user (e.g. register) and re-run. Run `pnpm db:migrate` (or `prisma migrate deploy`) with `DATABASE_URL` set.
+
 ### Authentication
 
 1. Copy `apps/api/.env.example` to `apps/api/.env` (optional, for JWT config)
@@ -107,3 +109,45 @@ CRUD routes require JWT. Use Swagger "Authorize" with the access token.
 | `pnpm db:push`    | Push schema to DB          |
 | `pnpm db:migrate` | Run migrations            |
 | `pnpm db:studio`  | Open Prisma Studio        |
+
+## Updating business rules
+
+The CRM uses configurable rules for **follow-up suggestions**, **deal health**, and **deal aging**. Change them in code as follows.
+
+### Suggested follow-ups
+
+- **Where:** API only.
+- **Rule logic:** `apps/api/src/followup-engine/followup-engine.evaluate.ts`  
+  Defines when each suggestion type fires (e.g. stale touch + no next step, overdue next step, stage stuck, critical health). Each rule has a `ruleCode`, title, description, severity, and cooldown.
+- **Thresholds and cooldowns:** `apps/api/src/followup-engine/followup-engine.config.ts`  
+  Tune days and cooldowns here; the evaluator reads `FOLLOWUP_ENGINE_CONFIG`.
+
+**To change behavior:**  
+1. Adjust numbers in `followup-engine.config.ts` (e.g. `STALE_TOUCH_DAYS`, `STAGE_STUCK_DAYS`, `*_COOLDOWN_DAYS`).  
+2. To add or change rule text or conditions, edit `followup-engine.evaluate.ts`.  
+3. Run the API test suite; follow-up engine tests live in `apps/api/src/followup-engine/`.
+
+### Deal health scoring
+
+- **Where:** API only.
+- **Config and logic:** `apps/api/src/opportunity/health-scoring.ts`  
+  `HEALTH_SCORING_CONFIG` holds all thresholds and penalties; `computeHealthScore()` produces the 0–100 score, status (healthy / warning / critical), and signals.
+
+**To change behavior:**  
+1. Edit `HEALTH_SCORING_CONFIG` in `health-scoring.ts` (e.g. `STALE_TOUCH_DAYS`, `STAGE_STUCK_DAYS`, penalty values, `HEALTHY_MIN` / `WARNING_MIN`).  
+2. Optionally add or change signal logic in `computeHealthScore()`.  
+3. Run tests in `apps/api/src/opportunity/` (e.g. health-scoring) to confirm.
+
+### Deal aging (Stale / At risk)
+
+- **Where:** Frontend only; used for pipeline and opportunity detail badges.
+- **Locations:**  
+  - **Pipeline:** `apps/web/src/app/(dashboard)/opportunities/pipeline/page.tsx` — constants `STALE_LAST_TOUCH_THRESHOLD` (7), `STALE_DAYS_IN_STAGE_THRESHOLD` (14), `APPROACH_LAST_TOUCH_THRESHOLD` (5), `APPROACH_DAYS_IN_STAGE_THRESHOLD` (12), and helpers `isStale()` / `isApproachingStale()`.  
+  - **Opportunity detail:** `apps/web/src/app/(dashboard)/opportunities/[id]/page.tsx` — same thresholds inlined (7, 14, 5, 12).  
+  - **Account opportunity list:** `apps/web/src/app/(dashboard)/accounts/[id]/page.tsx` — same thresholds inlined.
+
+**To change behavior:**  
+1. Update the constants in `pipeline/page.tsx` (lines ~139–142).  
+2. Update the inline expressions in the opportunity detail page and the account page so all three stay in sync (or refactor into a shared constant/helper to avoid drift).
+
+**Note:** Deal aging is display-only. The API does not store “stale” or “at risk”; it only provides `daysSinceLastTouch` and `daysInStage`. The follow-up engine and health scoring use their own configs (above) for suggestions and health score.

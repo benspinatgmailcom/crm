@@ -14,7 +14,7 @@ import {
 } from "@dnd-kit/core";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
-import { canWrite } from "@/lib/roles";
+import { canWrite, isAdmin } from "@/lib/roles";
 import { Modal } from "@/components/ui/modal";
 
 interface HealthSignal {
@@ -32,6 +32,8 @@ interface PipelineOpportunity {
   stage: string | null;
   accountId: string;
   accountName: string;
+  ownerId?: string;
+  ownerEmail?: string;
   daysSinceLastTouch: number | null;
   daysInStage: number | null;
   healthScore?: number;
@@ -764,6 +766,8 @@ const HEALTH_OPTIONS: { value: HealthFilter; label: string }[] = [
   { value: "critical", label: "Critical" },
 ];
 
+type OwnerFilter = "me" | "all" | string;
+
 const DEFAULT_FILTERS = {
   close: "all" as CloseFilter,
   min: "" as number | "",
@@ -772,6 +776,7 @@ const DEFAULT_FILTERS = {
   includeClosed: false,
   agingFilter: "all" as AgingFilter,
   healthStatus: "all" as HealthFilter,
+  ownerFilter: "me" as OwnerFilter,
 };
 
 export default function PipelinePage() {
@@ -779,10 +784,12 @@ export default function PipelinePage() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const canEdit = canWrite(user?.role);
+  const admin = isAdmin(user?.role);
   const [data, setData] = useState<PipelineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [users, setUsers] = useState<{ id: string; email: string; role: string }[]>([]);
 
   const [filters, setFilters] = useState(() => {
     const close = (searchParams.get("close") || "all") as CloseFilter;
@@ -792,10 +799,13 @@ export default function PipelinePage() {
     const closed = searchParams.get("closed");
     const aging = searchParams.get("aging");
     const health = searchParams.get("health");
+    const owner = searchParams.get("owner");
     const minNum = minRaw != null && minRaw !== "" ? Number(minRaw) : NaN;
     const maxNum = maxRaw != null && maxRaw !== "" ? Number(maxRaw) : NaN;
     const agingValid = AGING_OPTIONS.some((o) => o.value === aging);
     const healthValid = HEALTH_OPTIONS.some((o) => o.value === health);
+    const defaultOwner: OwnerFilter = searchParams.get("owner") == null && user?.role === "ADMIN" ? "all" : "me";
+    const ownerFilter = owner === "me" || owner === "all" || (owner != null && owner !== "") ? owner : defaultOwner;
     return {
       close: CLOSE_OPTIONS.some((o) => o.value === close) ? close : "all",
       min: Number.isFinite(minNum) ? minNum : ("" as number | ""),
@@ -804,6 +814,7 @@ export default function PipelinePage() {
       includeClosed: closed === "1",
       agingFilter: agingValid ? (aging as AgingFilter) : "all",
       healthStatus: healthValid ? (health as HealthFilter) : "all",
+      ownerFilter,
     };
   });
 
@@ -826,6 +837,9 @@ export default function PipelinePage() {
       else params.delete("aging");
       if (f.healthStatus !== "all") params.set("health", f.healthStatus);
       else params.delete("health");
+      if (f.ownerFilter && f.ownerFilter !== "all") params.set("owner", f.ownerFilter);
+      else if (f.ownerFilter === "all") params.set("owner", "all");
+      else params.delete("owner");
       const url = `/opportunities/pipeline?${params.toString()}`;
       queueMicrotask(() => {
         router.replace(url, { scroll: false });
@@ -864,33 +878,57 @@ export default function PipelinePage() {
   }, []);
 
   const clearFilters = useCallback(() => {
-    setFilters(DEFAULT_FILTERS);
+    const defaults = { ...DEFAULT_FILTERS, ownerFilter: (admin ? "all" : "me") as OwnerFilter };
+    setFilters(defaults);
     setAccountInput("");
-    syncUrl(DEFAULT_FILTERS);
-  }, [syncUrl]);
+    syncUrl(defaults);
+  }, [syncUrl, admin]);
 
   const filteredData = useMemo(() => {
     if (!data) return null;
     return applyFilters(data, filters);
   }, [data, filters]);
 
-  const fetchPipeline = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch<PipelineData>("/opportunities/pipeline");
-      setData(res ?? {});
-    } catch (err: unknown) {
-      const e = err as { message?: string };
-      setError(e.message || "Failed to load pipeline");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetchPipeline = useCallback(
+    async (ownerFilter?: OwnerFilter) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const q = ownerFilter ? `?owner=${encodeURIComponent(ownerFilter)}` : "";
+        const res = await apiFetch<PipelineData>(`/opportunities/pipeline${q}`);
+        setData(res ?? {});
+      } catch (err: unknown) {
+        const e = err as { message?: string };
+        setError(e.message || "Failed to load pipeline");
+      } finally {
+        setLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
-    fetchPipeline();
-  }, [fetchPipeline]);
+    fetchPipeline(filters.ownerFilter);
+  }, [fetchPipeline, filters.ownerFilter]);
+
+  // Default admin to "all" when URL has no owner (e.g. first load after auth)
+  useEffect(() => {
+    if (admin && searchParams.get("owner") == null && filters.ownerFilter === "me") {
+      setFilters((prev) => {
+        const next = { ...prev, ownerFilter: "all" as OwnerFilter };
+        syncUrl(next);
+        return next;
+      });
+    }
+  }, [admin, searchParams, filters.ownerFilter, syncUrl]);
+
+  useEffect(() => {
+    if (admin) {
+      apiFetch<{ id: string; email: string; role: string }[]>("/users/active")
+        .then(setUsers)
+        .catch(() => setUsers([]));
+    }
+  }, [admin]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1094,6 +1132,7 @@ export default function PipelinePage() {
     );
   }
 
+  const defaultOwner: OwnerFilter = admin ? "all" : "me";
   const hasActiveFilters =
     filters.close !== "all" ||
     filters.min !== "" ||
@@ -1101,7 +1140,8 @@ export default function PipelinePage() {
     filters.account.trim() !== "" ||
     filters.includeClosed ||
     filters.agingFilter !== "all" ||
-    filters.healthStatus !== "all";
+    filters.healthStatus !== "all" ||
+    filters.ownerFilter !== defaultOwner;
 
   return (
     <div>
@@ -1203,6 +1243,21 @@ export default function PipelinePage() {
               Health: {o.label}
             </option>
           ))}
+        </select>
+        <select
+          value={filters.ownerFilter}
+          onChange={(e) => updateFilter("ownerFilter", e.target.value as OwnerFilter)}
+          className="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1"
+          aria-label="Owner"
+        >
+          <option value="me">Mine</option>
+          <option value="all">All</option>
+          {admin &&
+            users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.email}
+              </option>
+            ))}
         </select>
         {hasActiveFilters && (
           <button

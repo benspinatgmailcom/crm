@@ -7,7 +7,7 @@ import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, 
 import { ActionIconButton } from "@/components/ui/action-icon-button";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
-import { canWrite } from "@/lib/roles";
+import { canWrite, isAdmin } from "@/lib/roles";
 import { Modal } from "@/components/ui/modal";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
@@ -29,6 +29,8 @@ interface Opportunity {
   probability: number | null;
   closeDate: string | null;
   sourceLeadId?: string | null;
+  ownerId?: string;
+  owner?: { id: string; email: string };
   lastActivityAt?: string | null;
   lastStageChangedAt?: string | null;
   nextFollowUpAt?: string | null;
@@ -137,6 +139,9 @@ export default function OpportunityDetailPage() {
   const [followupActionId, setFollowupActionId] = useState<string | null>(null);
   const [followupError, setFollowupError] = useState<string | null>(null);
   const [draftSubjectBody, setDraftSubjectBody] = useState<Record<string, { subject: string; body: string }>>({});
+
+  const [users, setUsers] = useState<{ id: string; email: string; role: string }[]>([]);
+  const [ownerSaving, setOwnerSaving] = useState(false);
 
   const fetchOpportunity = useCallback(async () => {
     if (!id) return;
@@ -313,6 +318,30 @@ export default function OpportunityDetailPage() {
       setContacts([]);
     }
   }, [opportunity?.accountId, fetchAccount, fetchContacts]);
+
+  useEffect(() => {
+    if (!opportunity || !canEdit) return;
+    const canChangeOwner = isAdmin(user?.role) || opportunity.ownerId === user?.id;
+    if (canChangeOwner) {
+      apiFetch<{ id: string; email: string; role: string }[]>("/users/active")
+        .then(setUsers)
+        .catch(() => setUsers([]));
+    }
+  }, [opportunity?.id, opportunity?.ownerId, user?.id, user?.role, canEdit]);
+
+  const updateOwner = async (newOwnerId: string) => {
+    if (!id || newOwnerId === opportunity?.ownerId) return;
+    setOwnerSaving(true);
+    try {
+      await apiFetch(`/opportunities/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ownerId: newOwnerId }),
+      });
+      await fetchOpportunity();
+    } finally {
+      setOwnerSaving(false);
+    }
+  };
 
   const openEdit = () => {
     if (!opportunity) return;
@@ -760,6 +789,27 @@ export default function OpportunityDetailPage() {
               <div>
                 <dt className="text-gray-500">Name</dt>
                 <dd className="font-medium text-gray-900">{opportunity.name}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Owner</dt>
+                <dd className="text-gray-900">
+                  {canEdit && (isAdmin(user?.role) || opportunity.ownerId === user?.id) && users.length > 0 ? (
+                    <select
+                      value={opportunity.ownerId ?? ""}
+                      onChange={(e) => updateOwner(e.target.value)}
+                      disabled={ownerSaving}
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 disabled:opacity-50"
+                    >
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.email} {u.role !== "USER" ? `(${u.role})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span>{opportunity.owner?.email ?? opportunity.ownerId ?? "—"}</span>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-gray-500">Stage</dt>

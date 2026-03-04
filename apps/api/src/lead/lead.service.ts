@@ -100,7 +100,7 @@ export class LeadService {
     await this.prisma.lead.delete({ where: { id } });
   }
 
-  async convert(id: string, dto?: ConvertLeadDto): Promise<ConvertLeadResult> {
+  async convert(id: string, dto: ConvertLeadDto | undefined, ownerId: string): Promise<ConvertLeadResult> {
     const lead = await this.findOne(id);
     if (lead.convertedAt) {
       throw new BadRequestException('Lead has already been converted');
@@ -137,6 +137,7 @@ export class LeadService {
           name: opportunityName,
           stage: 'prospecting',
           sourceLeadId: lead.id,
+          ownerId,
         },
       });
 

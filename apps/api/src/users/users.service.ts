@@ -22,6 +22,13 @@ export interface UserListItem {
   lastLoginAt?: Date | null;
 }
 
+/** For owner dropdowns; any authenticated user can call. */
+export interface UserActiveItem {
+  id: string;
+  email: string;
+  role: string;
+}
+
 export interface CreateUserResult {
   id: string;
   email: string;
@@ -41,6 +48,16 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
   ) {}
+
+  /** Active users for owner dropdown (id, email, role). */
+  async findActiveForDropdown(): Promise<UserActiveItem[]> {
+    const users = await this.prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true, email: true, role: true },
+      orderBy: { email: 'asc' },
+    });
+    return users;
+  }
 
   async findAll(): Promise<UserListItem[]> {
     const users = await this.prisma.user.findMany({
