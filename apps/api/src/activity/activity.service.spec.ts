@@ -126,5 +126,16 @@ describe('ActivityService', () => {
 
       expect(workflow.updateLastActivityAt).not.toHaveBeenCalled();
     });
+
+    it('does not call workflow for non-touch activity type (followup_draft_created)', async () => {
+      await service.createRaw({
+        entityType: 'opportunity',
+        entityId: 'opp-1',
+        type: 'followup_draft_created',
+        payload: {},
+      });
+
+      expect(workflow.updateLastActivityAt).not.toHaveBeenCalled();
+    });
   });
 });

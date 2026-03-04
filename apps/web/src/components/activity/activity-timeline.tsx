@@ -36,6 +36,8 @@ export const ACTIVITY_TYPES = [
   { value: "task_completed", label: "Task completed" },
   { value: "task_dismissed", label: "Task dismissed" },
   { value: "task_snoozed", label: "Task snoozed" },
+  { value: "followup_draft_created", label: "Follow-up draft" },
+  { value: "followup_sent", label: "Follow-up sent" },
 ] as const;
 
 interface Activity {
@@ -386,6 +388,26 @@ function ActivityItem({ activity }: { activity: Activity }) {
             ) : (
               <p className="text-sm text-gray-700">{text}</p>
             )}
+          </div>
+        );
+      }
+      case "followup_draft_created": {
+        const subject = m.subject != null ? String(m.subject) : null;
+        const channel = m.channel != null ? String(m.channel) : "email";
+        return (
+          <div className="space-y-1 text-sm">
+            <p className="font-medium text-gray-900">Follow-up draft ({channel})</p>
+            {subject && <p className="text-gray-700 truncate">{subject}</p>}
+          </div>
+        );
+      }
+      case "followup_sent": {
+        const channel = m.channel != null ? String(m.channel) : "email";
+        const notes = m.notes != null ? String(m.notes) : null;
+        return (
+          <div className="space-y-1 text-sm">
+            <p className="font-medium text-gray-900">Follow-up sent ({channel})</p>
+            {notes && <p className="text-gray-700">{notes}</p>}
           </div>
         );
       }

@@ -5,6 +5,7 @@ import { Activity, Prisma } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { isTouchActivityType } from './activity-touch.config';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { PAYLOAD_DTO_MAP } from './dto/payload-dtos';
 import { QueryActivityDto } from './dto/query-activity.dto';
@@ -37,7 +38,7 @@ export class ActivityService {
         payload: (dto.payload ?? {}) as Prisma.InputJsonValue,
       },
     });
-    if (dto.entityType === 'opportunity') {
+    if (dto.entityType === 'opportunity' && isTouchActivityType(dto.type)) {
       await this.workflow.updateLastActivityAt(dto.entityId, activity.createdAt);
     }
     return activity;
@@ -58,7 +59,7 @@ export class ActivityService {
         payload: data.payload as Prisma.InputJsonValue,
       },
     });
-    if (data.entityType === 'opportunity') {
+    if (data.entityType === 'opportunity' && isTouchActivityType(data.type)) {
       await this.workflow.updateLastActivityAt(data.entityId, activity.createdAt);
     }
     return activity;

@@ -15,5 +15,6 @@ import { OpenAiAdapter } from './adapter/openai.adapter';
     AiContextService,
     { provide: AiAdapter, useClass: OpenAiAdapter },
   ],
+  exports: [AiAdapter],
 })
 export class AiModule {}

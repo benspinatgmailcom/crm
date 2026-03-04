@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, Check, X, Pencil, Eye } from "lucide-react";
+import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, Check, X, Pencil, Eye, Copy, Send } from "lucide-react";
 import { ActionIconButton } from "@/components/ui/action-icon-button";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
@@ -54,6 +54,14 @@ interface Contact {
   email: string;
 }
 
+interface LatestDraft {
+  id: string;
+  subject: string;
+  body: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 interface FollowupSuggestion {
   id: string;
   metadata: {
@@ -65,6 +73,7 @@ interface FollowupSuggestion {
     reasonCodes: string[];
   };
   createdAt: string;
+  latestDraft?: LatestDraft;
 }
 
 interface OpenTask {
@@ -78,6 +87,7 @@ interface OpenTask {
   };
   createdAt: string;
   snoozedUntil?: string;
+  latestDraft?: LatestDraft;
 }
 
 interface FollowupsResponse {
@@ -125,6 +135,8 @@ export default function OpportunityDetailPage() {
   const [followups, setFollowups] = useState<FollowupsResponse | null>(null);
   const [followupsLoading, setFollowupsLoading] = useState(false);
   const [followupActionId, setFollowupActionId] = useState<string | null>(null);
+  const [followupError, setFollowupError] = useState<string | null>(null);
+  const [draftSubjectBody, setDraftSubjectBody] = useState<Record<string, { subject: string; body: string }>>({});
 
   const fetchOpportunity = useCallback(async () => {
     if (!id) return;
@@ -174,6 +186,7 @@ export default function OpportunityDetailPage() {
     try {
       const res = await apiFetch<FollowupsResponse>(`/opportunities/${opportunityId}/followups`);
       setFollowups(res);
+      setFollowupError(null);
     } catch {
       setFollowups(null);
     } finally {
@@ -222,6 +235,64 @@ export default function OpportunityDetailPage() {
     } finally {
       setFollowupActionId(null);
     }
+  };
+
+  const createDraftFromSuggestion = async (suggestionId: string) => {
+    setFollowupActionId(`draft-sug-${suggestionId}`);
+    setFollowupError(null);
+    try {
+      await apiFetch(`/followups/${suggestionId}/draft`, { method: "POST", body: JSON.stringify({}) });
+      if (id) await fetchFollowups(id);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setFollowupError(e.message ?? "Failed to generate draft");
+    } finally {
+      setFollowupActionId(null);
+    }
+  };
+
+  const createDraftFromTask = async (taskId: string) => {
+    setFollowupActionId(`draft-task-${taskId}`);
+    setFollowupError(null);
+    try {
+      await apiFetch(`/tasks/${taskId}/draft`, { method: "POST", body: JSON.stringify({}) });
+      if (id) await fetchFollowups(id);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setFollowupError(e.message ?? "Failed to generate draft");
+    } finally {
+      setFollowupActionId(null);
+    }
+  };
+
+  const markDraftSent = async (draftActivityId: string) => {
+    setFollowupActionId(`sent-${draftActivityId}`);
+    setFollowupError(null);
+    try {
+      await apiFetch(`/drafts/${draftActivityId}/mark-sent`, {
+        method: "POST",
+        body: JSON.stringify({ channel: "email" }),
+      });
+      if (id) await fetchFollowups(id);
+      setTimelineRefreshKey((k) => k + 1);
+    } catch (err: unknown) {
+      const e = err as { message?: string };
+      setFollowupError(e.message ?? "Failed to mark as sent");
+    } finally {
+      setFollowupActionId(null);
+    }
+  };
+
+  const getDraftEdit = (draftId: string) => draftSubjectBody[draftId] ?? null;
+  const setDraftEdit = (draftId: string, subject: string, body: string) => {
+    setDraftSubjectBody((prev) => ({ ...prev, [draftId]: { subject, body } }));
+  };
+  const clearDraftEdit = (draftId: string) => {
+    setDraftSubjectBody((prev) => {
+      const next = { ...prev };
+      delete next[draftId];
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -462,6 +533,9 @@ export default function OpportunityDetailPage() {
               <ListTodo className="h-4 w-4" />
               Follow-ups
             </h2>
+            {followupError && (
+              <p className="mb-2 rounded bg-red-50 px-2 py-1.5 text-sm text-red-700">{followupError}</p>
+            )}
             {followupsLoading ? (
               <p className="text-sm text-gray-500">Loading follow-ups...</p>
             ) : followups && (followups.suggestions.length > 0 || followups.openTasks.length > 0) ? (
@@ -497,14 +571,62 @@ export default function OpportunityDetailPage() {
                             )}
                           </div>
                           {canEdit && (
-                            <button
-                              type="button"
-                              onClick={() => createTaskFromSuggestion(s.id)}
-                              disabled={followupActionId === s.id}
-                              className="mt-2 rounded border border-accent-1 bg-white px-2 py-1 text-xs font-medium text-accent-1 hover:bg-accent-1/5 disabled:opacity-50"
-                            >
-                              {followupActionId === s.id ? "Creating…" : "Create task"}
-                            </button>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              <button
+                                type="button"
+                                onClick={() => createDraftFromSuggestion(s.id)}
+                                disabled={followupActionId === `draft-sug-${s.id}`}
+                                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                {followupActionId === `draft-sug-${s.id}` ? "Generating…" : "Draft follow-up"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => createTaskFromSuggestion(s.id)}
+                                disabled={followupActionId === s.id}
+                                className="rounded border border-accent-1 bg-white px-2 py-1 text-xs font-medium text-accent-1 hover:bg-accent-1/5 disabled:opacity-50"
+                              >
+                                {followupActionId === s.id ? "Creating…" : "Create task"}
+                              </button>
+                            </div>
+                          )}
+                          {s.latestDraft && (
+                            <div className="mt-3 rounded border border-gray-200 bg-white p-3 text-sm">
+                              <div className="mb-2 font-medium text-gray-700">Draft</div>
+                              <input
+                                type="text"
+                                className="mb-2 w-full rounded border border-gray-200 px-2 py-1 text-sm"
+                                placeholder="Subject"
+                                value={getDraftEdit(s.latestDraft.id)?.subject ?? s.latestDraft.subject}
+                                onChange={(e) => setDraftEdit(s.latestDraft!.id, e.target.value, getDraftEdit(s.latestDraft!.id)?.body ?? s.latestDraft!.body)}
+                              />
+                              <textarea
+                                className="mb-2 min-h-[80px] w-full rounded border border-gray-200 px-2 py-1 text-sm"
+                                placeholder="Body"
+                                value={getDraftEdit(s.latestDraft.id)?.body ?? s.latestDraft.body}
+                                onChange={(e) => setDraftEdit(s.latestDraft!.id, getDraftEdit(s.latestDraft!.id)?.subject ?? s.latestDraft!.subject, e.target.value)}
+                                rows={4}
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => navigator.clipboard.writeText((getDraftEdit(s.latestDraft!.id)?.body ?? s.latestDraft!.body) || "")}
+                                  className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Copy className="h-3 w-3" /> Copy
+                                </button>
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => markDraftSent(s.latestDraft!.id)}
+                                    disabled={followupActionId === `sent-${s.latestDraft!.id}`}
+                                    className="inline-flex items-center gap-1 rounded border border-emerald-600 bg-white px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                                  >
+                                    <Send className="h-3 w-3" /> Mark as Sent
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </li>
                       ))}
@@ -534,6 +656,14 @@ export default function OpportunityDetailPage() {
                           </div>
                           {canEdit && (
                             <div className="mt-2 flex flex-wrap gap-1">
+                              <button
+                                type="button"
+                                onClick={() => createDraftFromTask(t.id)}
+                                disabled={followupActionId === `draft-task-${t.id}`}
+                                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                {followupActionId === `draft-task-${t.id}` ? "Generating…" : "Draft follow-up"}
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => completeTask(t.id)}
@@ -573,6 +703,44 @@ export default function OpportunityDetailPage() {
                                 <option value="3d">3 days</option>
                                 <option value="1w">1 week</option>
                               </select>
+                            </div>
+                          )}
+                          {t.latestDraft && (
+                            <div className="mt-3 rounded border border-gray-200 bg-white p-3 text-sm">
+                              <div className="mb-2 font-medium text-gray-700">Draft</div>
+                              <input
+                                type="text"
+                                className="mb-2 w-full rounded border border-gray-200 px-2 py-1 text-sm"
+                                placeholder="Subject"
+                                value={getDraftEdit(t.latestDraft.id)?.subject ?? t.latestDraft.subject}
+                                onChange={(e) => setDraftEdit(t.latestDraft!.id, e.target.value, getDraftEdit(t.latestDraft!.id)?.body ?? t.latestDraft!.body)}
+                              />
+                              <textarea
+                                className="mb-2 min-h-[80px] w-full rounded border border-gray-200 px-2 py-1 text-sm"
+                                placeholder="Body"
+                                value={getDraftEdit(t.latestDraft.id)?.body ?? t.latestDraft.body}
+                                onChange={(e) => setDraftEdit(t.latestDraft!.id, getDraftEdit(t.latestDraft!.id)?.subject ?? t.latestDraft!.subject, e.target.value)}
+                                rows={4}
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => navigator.clipboard.writeText((getDraftEdit(t.latestDraft!.id)?.body ?? t.latestDraft!.body) || "")}
+                                  className="inline-flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Copy className="h-3 w-3" /> Copy
+                                </button>
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => markDraftSent(t.latestDraft!.id)}
+                                    disabled={followupActionId === `sent-${t.latestDraft!.id}`}
+                                    className="inline-flex items-center gap-1 rounded border border-emerald-600 bg-white px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                                  >
+                                    <Send className="h-3 w-3" /> Mark as Sent
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           )}
                         </li>

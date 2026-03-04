@@ -223,6 +223,26 @@ function ActivityItem({
           </div>
         );
       }
+      case "followup_draft_created": {
+        const subject = m.subject != null ? String(m.subject) : null;
+        const channel = m.channel != null ? String(m.channel) : "email";
+        return (
+          <div className="text-sm space-y-1">
+            <p className="font-medium text-gray-900">Follow-up draft ({channel})</p>
+            {subject && <p className="text-gray-700 truncate">{subject}</p>}
+          </div>
+        );
+      }
+      case "followup_sent": {
+        const channel = m.channel != null ? String(m.channel) : "email";
+        const notes = m.notes != null ? String(m.notes) : null;
+        return (
+          <div className="text-sm space-y-1">
+            <p className="font-medium text-gray-900">Follow-up sent ({channel})</p>
+            {notes && <p className="text-gray-700">{notes}</p>}
+          </div>
+        );
+      }
       default: {
         const followupTaskTypes = ["followup_suggested", "task_created", "task_completed", "task_dismissed", "task_snoozed"];
         if (followupTaskTypes.includes(type) && m && typeof m === "object") {

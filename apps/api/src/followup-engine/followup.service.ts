@@ -219,21 +219,45 @@ export class FollowUpService {
 
   /**
    * List suggestions (SUGGESTED, not superseded by open task) and open tasks for an opportunity.
+   * Includes latest draft per suggestion/task when present.
    */
   async listOpportunityFollowups(opportunityId: string): Promise<{
-    suggestions: Array<{ id: string; metadata: FollowupSuggestionMetadata; createdAt: Date }>;
-    openTasks: Array<{ id: string; metadata: TaskCreatedMetadata; createdAt: Date; snoozedUntil?: Date }>;
+    suggestions: Array<{
+      id: string;
+      metadata: FollowupSuggestionMetadata;
+      createdAt: Date;
+      latestDraft?: { id: string; subject: string; body: string; metadata: Record<string, unknown>; createdAt: Date };
+    }>;
+    openTasks: Array<{
+      id: string;
+      metadata: TaskCreatedMetadata;
+      createdAt: Date;
+      snoozedUntil?: Date;
+      latestDraft?: { id: string; subject: string; body: string; metadata: Record<string, unknown>; createdAt: Date };
+    }>;
   }> {
-    const activities = await this.prisma.activity.findMany({
-      where: {
-        entityType: ENTITY_TYPE_OPPORTUNITY,
-        entityId: opportunityId,
-        type: { in: [TYPES_SUGGESTION, TYPES_TASK, ...TYPES_STATE] },
-        deletedAt: null,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, type: true, metadata: true, createdAt: true },
-    });
+    const [activities, drafts] = await Promise.all([
+      this.prisma.activity.findMany({
+        where: {
+          entityType: ENTITY_TYPE_OPPORTUNITY,
+          entityId: opportunityId,
+          type: { in: [TYPES_SUGGESTION, TYPES_TASK, ...TYPES_STATE] },
+          deletedAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, type: true, metadata: true, createdAt: true },
+      }),
+      this.prisma.activity.findMany({
+        where: {
+          entityType: ENTITY_TYPE_OPPORTUNITY,
+          entityId: opportunityId,
+          type: 'followup_draft_created',
+          deletedAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, metadata: true, createdAt: true },
+      }),
+    ]);
 
     const openTaskIds = new Set<string>();
     const taskSnoozedUntil = new Map<string, Date>();
@@ -257,9 +281,34 @@ export class FollowUpService {
       }
     }
 
+    const latestDraftBySuggestion = new Map<string, { id: string; subject: string; body: string; metadata: Record<string, unknown>; createdAt: Date }>();
+    const latestDraftByTask = new Map<string, { id: string; subject: string; body: string; metadata: Record<string, unknown>; createdAt: Date }>();
+    for (const d of drafts) {
+      const m = (d.metadata ?? {}) as Record<string, unknown>;
+      if ((m.status as string) !== 'DRAFT') continue;
+      const sugId = m.suggestionActivityId as string | undefined;
+      const taskId = m.taskActivityId as string | undefined;
+      const subject = String(m.subject ?? '');
+      const body = String(m.body ?? '');
+      const draftRow = { id: d.id, subject, body, metadata: m, createdAt: d.createdAt };
+      if (sugId && !latestDraftBySuggestion.has(sugId)) latestDraftBySuggestion.set(sugId, draftRow);
+      if (taskId && !latestDraftByTask.has(taskId)) latestDraftByTask.set(taskId, draftRow);
+    }
+
     const now = new Date();
-    const suggestions: Array<{ id: string; metadata: FollowupSuggestionMetadata; createdAt: Date }> = [];
-    const openTasks: Array<{ id: string; metadata: TaskCreatedMetadata; createdAt: Date; snoozedUntil?: Date }> = [];
+    const suggestions: Array<{
+      id: string;
+      metadata: FollowupSuggestionMetadata;
+      createdAt: Date;
+      latestDraft?: { id: string; subject: string; body: string; metadata: Record<string, unknown>; createdAt: Date };
+    }> = [];
+    const openTasks: Array<{
+      id: string;
+      metadata: TaskCreatedMetadata;
+      createdAt: Date;
+      snoozedUntil?: Date;
+      latestDraft?: { id: string; subject: string; body: string; metadata: Record<string, unknown>; createdAt: Date };
+    }> = [];
 
     for (const a of activities) {
       const meta = a.metadata as Record<string, unknown> | null;
@@ -270,6 +319,7 @@ export class FollowUpService {
           id: a.id,
           metadata: meta as unknown as FollowupSuggestionMetadata,
           createdAt: a.createdAt,
+          latestDraft: latestDraftBySuggestion.get(a.id),
         });
       }
       if (a.type === TYPES_TASK && (meta?.status as string) === 'OPEN' && openTaskIds.has(a.id)) {
@@ -280,6 +330,7 @@ export class FollowUpService {
           metadata: meta as unknown as TaskCreatedMetadata,
           createdAt: a.createdAt,
           snoozedUntil: until,
+          latestDraft: latestDraftByTask.get(a.id),
         });
       }
     }
