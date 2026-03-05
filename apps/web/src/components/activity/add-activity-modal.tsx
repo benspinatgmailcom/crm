@@ -18,12 +18,14 @@ interface AddActivityModalProps {
 /** Activity types that are appropriate for a user to manually add (excludes system-generated e.g. stage_change, file_uploaded, ai_*) */
 const MANUAL_ADD_ACTIVITY_TYPES = ["note", "call", "meeting", "email", "task"] as const;
 
+const TASK_PRIORITIES = ["low", "medium", "high"] as const;
+
 type PayloadState = {
   note: { text: string };
   call: { summary: string; outcome: string; nextStep: string };
   meeting: { summary: string; outcome: string; nextStep: string };
   email: { subject: string; body: string; direction: string };
-  task: { title: string; dueAt: string; status: string };
+  task: { title: string; dueAt: string; status: string; priority: string };
 };
 
 const initialPayload: PayloadState = {
@@ -31,7 +33,7 @@ const initialPayload: PayloadState = {
   call: { summary: "", outcome: "", nextStep: "" },
   meeting: { summary: "", outcome: "", nextStep: "" },
   email: { subject: "", body: "", direction: "" },
-  task: { title: "", dueAt: "", status: "open" },
+  task: { title: "", dueAt: "", status: "open", priority: "" },
 };
 
 /** Valid activity type values for preset (must be subset of MANUAL_ADD_ACTIVITY_TYPES) */
@@ -124,6 +126,7 @@ export function AddActivityModal({
             title: (p as { title: string }).title.trim(),
             dueAt: (p as { dueAt: string }).dueAt?.trim() || undefined,
             status: (p as { status: string }).status || "open",
+            priority: (p as { priority: string }).priority?.trim() || undefined,
           };
         default:
           return {};
@@ -340,6 +343,26 @@ export function AddActivityModal({
               >
                 <option value="open">Open</option>
                 <option value="done">Done</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Priority</label>
+              <select
+                value={(p as { priority: string }).priority}
+                onChange={(e) =>
+                  setPayload((prev) => ({
+                    ...prev,
+                    task: { ...prev.task, priority: e.target.value },
+                  }))
+                }
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">None</option>
+                {TASK_PRIORITIES.map((pri) => (
+                  <option key={pri} value={pri}>
+                    {pri.charAt(0).toUpperCase() + pri.slice(1)}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

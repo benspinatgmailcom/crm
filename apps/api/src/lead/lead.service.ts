@@ -148,6 +148,7 @@ export class LeadService {
         title: 'Schedule discovery call',
         status: 'open',
         dueAt: dueAt.toISOString(),
+        priority: 'high',
         source: { leadConversion: true, leadId: lead.id },
       };
 

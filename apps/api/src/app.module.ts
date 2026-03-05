@@ -23,6 +23,7 @@ import { MetabaseModule } from './metabase/metabase.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { TasksModule } from './tasks/tasks.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 
@@ -44,6 +45,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
     MetabaseModule,
     UsersModule,
     DashboardModule,
+    TasksModule,
     DevModule,
   ],
   controllers: [AppController, HealthController, ProbesController],

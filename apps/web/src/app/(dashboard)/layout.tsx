@@ -7,12 +7,15 @@ import Image from "next/image";
 import {
   BarChart,
   Building2,
+  Calendar as CalendarIcon,
   Contact,
   Settings,
   Target,
   Briefcase,
   Wrench,
   Activity,
+  ListTodo,
+  MessageSquarePlus,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { isAdmin } from "@/lib/roles";
@@ -33,6 +36,9 @@ const navItems: Array<{
   { href: "/contacts", label: "Contacts", icon: Contact },
   { href: "/leads", label: "Leads", icon: Target },
   { href: "/opportunities", label: "Opportunities", icon: Briefcase },
+  { href: "/tasks", label: "Tasks", icon: ListTodo },
+  { href: "/followups", label: "Follow-ups", icon: MessageSquarePlus },
+  { href: "/calendar", label: "Calendar", icon: CalendarIcon },
   { href: "/health", label: "Pipeline Health", icon: Activity },
   { href: "/reports", label: "Reports", icon: BarChart },
   { href: "/settings/users", label: "Settings", icon: Settings, adminOnly: true },

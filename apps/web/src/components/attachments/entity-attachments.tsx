@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api-client";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ActionIconButton } from "@/components/ui/action-icon-button";
-import { Download, Trash2 } from "lucide-react";
+import { Download, Trash2, Paperclip } from "lucide-react";
 import { env } from "@/lib/env";
 import type { ActivityEntityType } from "@/components/activity/activity-timeline";
 
@@ -129,7 +129,10 @@ export function EntityAttachments({
   return (
     <div className="mt-4 border-t border-gray-200 pt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Attachments</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <Paperclip className="h-4 w-4" />
+          Attachments
+        </h3>
         {canEdit && (
         <button
           onClick={() => setUploadModalOpen(true)}
