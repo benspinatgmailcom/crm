@@ -35,7 +35,7 @@ const initialPayload: PayloadState = {
 };
 
 /** Valid activity type values for preset (must be subset of MANUAL_ADD_ACTIVITY_TYPES) */
-const VALID_ACTIVITY_TYPE_VALUES = [...MANUAL_ADD_ACTIVITY_TYPES];
+const VALID_ACTIVITY_TYPE_VALUES: readonly string[] = [...MANUAL_ADD_ACTIVITY_TYPES];
 
 export function AddActivityModal({
   isOpen,
@@ -50,9 +50,11 @@ export function AddActivityModal({
 
   useEffect(() => {
     if (isOpen) {
-      const initialType =
-        presetType && VALID_ACTIVITY_TYPE_VALUES.includes(presetType) ? presetType : "note";
-      setType(initialType);
+      const validType =
+        presetType && VALID_ACTIVITY_TYPE_VALUES.includes(presetType)
+          ? presetType
+          : "note";
+      setType(validType as (typeof MANUAL_ADD_ACTIVITY_TYPES)[number]);
     }
   }, [isOpen, presetType]);
   const [errors, setErrors] = useState<Record<string, string>>({});
