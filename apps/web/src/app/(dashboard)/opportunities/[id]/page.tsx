@@ -861,7 +861,7 @@ export default function OpportunityDetailPage() {
               </div>
               <div>
                 <dt className="text-gray-500">Expected revenue</dt>
-                <dd className="text-gray-900">{formatAmount(opportunity.expectedRevenue)}</dd>
+                <dd className="text-gray-900">{formatAmount(opportunity.expectedRevenue ?? null)}</dd>
               </div>
               {opportunity.sourceLeadId && (
                 <div>

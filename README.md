@@ -138,6 +138,45 @@ The CRM uses configurable rules for **follow-up suggestions**, **deal health**, 
 2. Optionally add or change signal logic in `computeHealthScore()`.  
 3. Run tests in `apps/api/src/opportunity/` (e.g. health-scoring) to confirm.
 
+### Forecast (win probability and forecast category)
+
+The system computes a **close probability** (win probability, 0–100) and a **forecast category** (pipeline / best case / commit / closed) for each opportunity using a deterministic, rule-based engine.
+
+- **Where:** API only.  
+- **Config:** `apps/api/src/forecast-engine/forecast-engine.config.ts` — stage weights, category thresholds, and adjustment values.  
+- **Logic:** `apps/api/src/forecast-engine/forecast-engine.evaluate.ts` — `evaluateForecast()` takes stage, amount, health score/status, days since last touch, days in stage, and next follow-up date; returns win probability, forecast category, expected revenue, and drivers (explainability).
+
+**How close probability is determined**
+
+1. **Base from stage** — Each stage has a base weight (e.g. prospecting 10%, qualification 20%, discovery 35%, proposal 50%, negotiation 70%). Closed-won → 100%; closed-lost → 0%. Unknown stages use the default (10%).
+
+2. **Adjustments (add or subtract)**  
+   - **Health:** score ≥ 80 → +10; score &lt; 50 → −15; score null → −5.  
+   - **Staleness (days since last activity):** ≥ 14 days or null → −15; 7–13 days → −8.  
+   - **Stage age (days in current stage):** ≥ 30 days or null → −12; 14–29 days → −6.  
+   - **Overdue next step:** next follow-up in the past → −8.  
+   - **Positive momentum:** last touch ≤ 2 days ago and health not critical → +5.
+
+3. **Final value** — Sum of base + adjustments, clamped to 0–100 and rounded. That is the **win probability** (close probability).
+
+**How forecast category is determined**
+
+- **Closed-won** → category **closed**, probability 100%.  
+- **Closed-lost** → category **closed**, probability 0%.  
+- **Open deals:**  
+  - **Commit** — win probability ≥ 75% and health status is not critical.  
+  - **Best case** — win probability ≥ 45% (and not commit).  
+  - **Pipeline** — win probability &lt; 45%.
+
+**Expected revenue** = opportunity amount × (win probability / 100). Null if no amount.
+
+**When it runs:** On opportunity create/update (unless the user overrides forecast fields), when a touch activity is recorded, and after the story seed. Values are persisted so the pipeline and dashboard can filter/display without recomputing every time.
+
+**To change behavior:**  
+1. Edit `FORECAST_ENGINE_CONFIG` in `forecast-engine.config.ts` (stage weights, thresholds, penalties, bonuses).  
+2. To change category rules or add drivers, edit `forecast-engine.evaluate.ts`.  
+3. Run tests in `apps/api/src/forecast-engine/` (e.g. `forecast-engine.evaluate.spec.ts`).
+
 ### Deal aging (Stale / At risk)
 
 - **Where:** Frontend only; used for pipeline and opportunity detail badges.
