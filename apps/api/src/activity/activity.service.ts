@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { Activity, Prisma } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { OpportunityForecastService } from '../forecast-engine/opportunity-forecast.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { isTouchActivityType } from './activity-touch.config';
@@ -16,6 +17,7 @@ export class ActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workflow: WorkflowService,
+    private readonly forecastService: OpportunityForecastService,
   ) {}
 
   async create(dto: CreateActivityDto): Promise<Activity> {
@@ -40,6 +42,7 @@ export class ActivityService {
     });
     if (dto.entityType === 'opportunity' && isTouchActivityType(dto.type)) {
       await this.workflow.updateLastActivityAt(dto.entityId, activity.createdAt);
+      await this.forecastService.recomputeForecast(dto.entityId).catch(() => {});
     }
     return activity;
   }
@@ -61,6 +64,7 @@ export class ActivityService {
     });
     if (data.entityType === 'opportunity' && isTouchActivityType(data.type)) {
       await this.workflow.updateLastActivityAt(data.entityId, activity.createdAt);
+      await this.forecastService.recomputeForecast(data.entityId).catch(() => {});
     }
     return activity;
   }

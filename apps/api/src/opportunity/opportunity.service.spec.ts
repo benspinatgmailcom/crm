@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Opportunity } from '@crm/db';
 import { ActivityService } from '../activity/activity.service';
+import { OpportunityForecastService } from '../forecast-engine/opportunity-forecast.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OpportunityService } from './opportunity.service';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
@@ -58,19 +59,28 @@ describe('OpportunityService', () => {
     createRaw: jest.fn(),
   };
 
+  const mockForecastService = {
+    recomputeForecast: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     mockPrisma.opportunity.findUnique.mockResolvedValue(existingOpp);
     mockPrisma.opportunity.update.mockImplementation((args: { where: { id: string }; data: object }) =>
       Promise.resolve({ ...existingOpp, ...args.data, updatedAt: new Date() }),
     );
+    mockPrisma.opportunity.create.mockImplementation((args: { data: object }) =>
+      Promise.resolve({ ...existingOpp, ...args.data, createdAt: new Date(), updatedAt: new Date() }),
+    );
     mockActivityService.createRaw.mockResolvedValue({});
+    mockForecastService.recomputeForecast.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OpportunityService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ActivityService, useValue: mockActivityService },
+        { provide: OpportunityForecastService, useValue: mockForecastService },
       ],
     }).compile();
 
