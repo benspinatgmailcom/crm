@@ -47,7 +47,6 @@ export class OpportunityService {
         name: dto.name,
         amount: dto.amount != null ? dto.amount : undefined,
         stage: dto.stage ?? 'prospecting',
-        probability: dto.probability,
         closeDate: dto.closeDate ? new Date(dto.closeDate) : undefined,
         ownerId,
       },
@@ -293,7 +292,6 @@ export class OpportunityService {
         name: true,
         amount: true,
         stage: true,
-        probability: true,
         closeDate: true,
         sourceLeadId: true,
         ownerId: true,
@@ -365,9 +363,22 @@ export class OpportunityService {
 
     const stageChanged =
       dto.stage !== undefined && dto.stage !== current.stage;
+    if (stageChanged && dto.stage === 'closed-lost') {
+      const reason = (dto.lostReason ?? '').trim();
+      if (!reason) {
+        throw new BadRequestException('A reason is required when closing an opportunity as lost.');
+      }
+      if (reason === 'Other') {
+        const notes = (dto.lostNotes ?? '').trim();
+        if (!notes) {
+          throw new BadRequestException('A note is required when the reason for loss is "Other".');
+        }
+      }
+    }
+
     const now = new Date();
 
-    const { ownerId, winProbability: dtoWinProb, forecastCategory: dtoCategory, ...restDto } = dto;
+    const { ownerId, winProbability: dtoWinProb, forecastCategory: dtoCategory, lostReason: _lostReason, lostNotes: _lostNotes, ...restDto } = dto;
     const updateData: Prisma.OpportunityUpdateInput = {
       ...restDto,
       amount: dto.amount !== undefined ? dto.amount : undefined,
@@ -394,11 +405,22 @@ export class OpportunityService {
     });
 
     if (stageChanged) {
+      const payload: Record<string, unknown> = {
+        fromStage: current.stage ?? null,
+        toStage: dto.stage,
+      };
+      if (dto.stage === 'closed-lost' && dto.lostReason?.trim()) {
+        payload.reason = dto.lostReason.trim();
+      }
+      if (dto.stage === 'closed-lost' && dto.lostNotes != null) {
+        const notesStr = typeof dto.lostNotes === 'string' ? dto.lostNotes.trim() : '';
+        if (notesStr) payload.notes = notesStr;
+      }
       await this.activityService.createRaw({
         entityType: 'opportunity',
         entityId: id,
         type: 'stage_change',
-        payload: { from: current.stage ?? null, to: dto.stage },
+        payload,
       });
     }
 
@@ -414,5 +436,95 @@ export class OpportunityService {
   async remove(id: string): Promise<void> {
     await this.findOne(id);
     await this.prisma.opportunity.delete({ where: { id } });
+  }
+
+  async getDealTeam(opportunityId: string) {
+    await this.findOne(opportunityId);
+    const rows = await this.prisma.opportunityContact.findMany({
+      where: { opportunityId },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((r) => ({
+      contactId: r.contactId,
+      role: r.role,
+      contact: r.contact,
+    }));
+  }
+
+  async addDealTeamMember(
+    opportunityId: string,
+    contactId: string,
+    role: string,
+  ) {
+    const opp = await this.prisma.opportunity.findUnique({
+      where: { id: opportunityId },
+      select: { id: true, accountId: true },
+    });
+    if (!opp) throw new NotFoundException(`Opportunity ${opportunityId} not found`);
+    const contact = await this.prisma.contact.findUnique({
+      where: { id: contactId },
+      select: { id: true, accountId: true },
+    });
+    if (!contact) throw new NotFoundException(`Contact ${contactId} not found`);
+    if (contact.accountId !== opp.accountId) {
+      throw new BadRequestException('Contact must belong to the opportunity account');
+    }
+    const existing = await this.prisma.opportunityContact.findUnique({
+      where: { opportunityId_contactId: { opportunityId, contactId } },
+    });
+    if (existing) {
+      return this.prisma.opportunityContact.update({
+        where: { id: existing.id },
+        data: { role },
+        include: {
+          contact: {
+            select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+          },
+        },
+      });
+    }
+    return this.prisma.opportunityContact.create({
+      data: { opportunityId, contactId, role },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+        },
+      },
+    });
+  }
+
+  async updateDealTeamMemberRole(
+    opportunityId: string,
+    contactId: string,
+    role: string,
+  ) {
+    await this.findOne(opportunityId);
+    const oc = await this.prisma.opportunityContact.findUnique({
+      where: { opportunityId_contactId: { opportunityId, contactId } },
+    });
+    if (!oc) throw new NotFoundException('Deal team member not found');
+    return this.prisma.opportunityContact.update({
+      where: { id: oc.id },
+      data: { role },
+      include: {
+        contact: {
+          select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+        },
+      },
+    });
+  }
+
+  async removeDealTeamMember(opportunityId: string, contactId: string): Promise<void> {
+    await this.findOne(opportunityId);
+    const oc = await this.prisma.opportunityContact.findUnique({
+      where: { opportunityId_contactId: { opportunityId, contactId } },
+    });
+    if (!oc) throw new NotFoundException('Deal team member not found');
+    await this.prisma.opportunityContact.delete({ where: { id: oc.id } });
   }
 }

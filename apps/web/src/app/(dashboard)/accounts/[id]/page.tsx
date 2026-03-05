@@ -37,7 +37,6 @@ interface Opportunity {
   name: string;
   amount: { toString(): string } | null;
   stage: string | null;
-  probability: number | null;
   closeDate: string | null;
   daysSinceLastTouch?: number | null;
   daysInStage?: number | null;
@@ -291,7 +290,7 @@ export default function AccountDetailPage() {
 
   const openAddOpp = () => {
     setOppEditingId(null);
-    setOppFormData({ accountId: id, name: "", stage: "prospecting", amount: undefined, probability: undefined, closeDate: "" });
+    setOppFormData({ accountId: id, name: "", stage: "prospecting", amount: undefined, closeDate: "" });
     setOppFormErrors({});
     setOppModalOpen(true);
   };
@@ -303,7 +302,6 @@ export default function AccountDetailPage() {
       name: o.name,
       stage: o.stage || "prospecting",
       amount: o.amount != null ? Number(o.amount.toString()) : undefined,
-      probability: o.probability ?? undefined,
       closeDate: o.closeDate ? new Date(o.closeDate).toISOString().slice(0, 10) : "",
     });
     setOppFormErrors({});
@@ -330,7 +328,6 @@ export default function AccountDetailPage() {
         ...parsed.data,
         closeDate: parsed.data.closeDate || undefined,
         amount: parsed.data.amount,
-        probability: parsed.data.probability,
       };
       if (oppEditingId) {
         await apiFetch(`/opportunities/${oppEditingId}`, { method: "PATCH", body: JSON.stringify(payload) });

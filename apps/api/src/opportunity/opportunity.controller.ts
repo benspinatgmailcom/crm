@@ -8,6 +8,7 @@ import { Role } from '../auth/constants';
 import { OpportunityService } from './opportunity.service';
 import { FollowUpService } from '../followup-engine/followup.service';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
+import { AddDealTeamMemberDto, UpdateDealTeamMemberDto } from './dto/deal-team.dto';
 import { PipelineQueryDto } from './dto/pipeline-query.dto';
 import { QueryOpportunityDto } from './dto/query-opportunity.dto';
 import { UpdateOpportunityDto } from './dto/update-opportunity.dto';
@@ -80,6 +81,48 @@ export class OpportunityController {
     return this.followUpService.listOpportunityFollowups(id);
   }
 
+  @Get(':id/deal-team')
+  @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
+  @ApiOperation({ summary: 'List deal team (buying team) for an opportunity' })
+  @ApiResponse({ status: 200, description: 'Returns array of { contactId, role, contact }' })
+  getDealTeam(@Param('id') id: string) {
+    return this.opportunityService.getDealTeam(id);
+  }
+
+  @Post(':id/deal-team')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Add or update a contact on the deal team with a buyer role' })
+  @ApiResponse({ status: 201, description: 'Deal team member added or updated' })
+  addDealTeamMember(
+    @Param('id') id: string,
+    @Body() dto: AddDealTeamMemberDto,
+  ) {
+    return this.opportunityService.addDealTeamMember(id, dto.contactId, dto.role);
+  }
+
+  @Patch(':id/deal-team/:contactId')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Update deal team member role' })
+  @ApiResponse({ status: 200, description: 'Deal team member updated' })
+  updateDealTeamMember(
+    @Param('id') id: string,
+    @Param('contactId') contactId: string,
+    @Body() dto: UpdateDealTeamMemberDto,
+  ) {
+    return this.opportunityService.updateDealTeamMemberRole(id, contactId, dto.role);
+  }
+
+  @Delete(':id/deal-team/:contactId')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Remove a contact from the deal team' })
+  @ApiResponse({ status: 204, description: 'Deal team member removed' })
+  async removeDealTeamMember(
+    @Param('id') id: string,
+    @Param('contactId') contactId: string,
+  ): Promise<void> {
+    await this.opportunityService.removeDealTeamMember(id, contactId);
+  }
+
   @Get(':id')
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
   @ApiOperation({ summary: 'Get opportunity by ID' })
@@ -97,9 +140,11 @@ export class OpportunityController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateOpportunityDto,
+    @Body('lostNotes') bodyLostNotes: string | undefined,
     @CurrentUser() user: User,
   ): Promise<Opportunity> {
-    return this.opportunityService.update(id, dto, user);
+    const dtoWithNotes = bodyLostNotes !== undefined ? { ...dto, lostNotes: bodyLostNotes } : dto;
+    return this.opportunityService.update(id, dtoWithNotes, user);
   }
 
   @Delete(':id')

@@ -1,19 +1,24 @@
 import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Activity } from '@crm/db';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
+import { AiDealBriefService } from './ai-deal-brief.service';
 import { AiService, type DraftEmailResult, type NextActionsResponse } from './ai.service';
+import { GenerateDealBriefDto } from './dto/deal-brief.dto';
 import { DraftEmailDto, LogDraftEmailDto } from './dto/draft-email.dto';
-import { ConvertActionDto } from './dto/next-actions.dto';
-import { NextActionsDto } from './dto/next-actions.dto';
+import { ConvertActionDto, NextActionsDto } from './dto/next-actions.dto';
 import { GenerateSummaryDto } from './dto/summary.dto';
 
 @ApiTags('AI')
 @Controller('ai')
 @ApiBearerAuth()
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiService: AiService,
+    private readonly aiDealBriefService: AiDealBriefService,
+  ) {}
 
   @Post('draft-email/:activityId/log')
   @Roles(Role.ADMIN, Role.USER)
@@ -72,5 +77,23 @@ export class AiController {
     @Body() dto: ConvertActionDto,
   ): Promise<Activity> {
     return this.aiService.convertToTask(activityId, dto.actionIndex);
+  }
+
+  @Post('deal-brief/:opportunityId')
+  @Roles(Role.ADMIN, Role.USER)
+  @ApiOperation({ summary: 'Generate AI deal brief for an opportunity' })
+  @ApiResponse({ status: 201, description: 'Deal brief returned (cached or newly generated)' })
+  @ApiResponse({ status: 404, description: 'Opportunity not found' })
+  @ApiResponse({ status: 503, description: 'AI service unavailable' })
+  generateDealBrief(
+    @Param('opportunityId') opportunityId: string,
+    @CurrentUser('id') userId: string,
+    @Body() dto?: GenerateDealBriefDto,
+  ) {
+    const options = {
+      forceRefresh: dto?.forceRefresh ?? false,
+      lookbackDays: dto?.lookbackDays ?? 30,
+    };
+    return this.aiDealBriefService.generateDealBrief(opportunityId, userId, options);
   }
 }

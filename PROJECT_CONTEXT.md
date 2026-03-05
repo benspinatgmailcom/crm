@@ -8,7 +8,7 @@ Ultimately, this will be part of a project called "Bespoke CRM", where we start 
 ---
 
 ## Current Phase
-Workflow Intelligence: Stage probability editing
+AI Differentiation
 
 ---
 
@@ -183,7 +183,7 @@ External APIs (OpenAI, Salesforce, etc)
 ## Phase 2 – Workflow Intelligence
 - Deal aging detection (Done)
 - Pipeline health dashboard (Done)
-- Stage probability editing
+- Stage probability editing (Done)
 - Win/loss reporting
 - Auto follow-up tasks
 - Notifications

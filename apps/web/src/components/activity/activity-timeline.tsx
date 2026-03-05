@@ -99,10 +99,21 @@ function formatDate(s: string) {
   return d.toLocaleDateString();
 }
 
-function ActivityItem({ activity }: { activity: Activity }) {
+interface ActivityItemProps {
+  activity: Activity;
+  onUpdateTaskStatus?: (activityId: string, currentPayload: Record<string, unknown>, newStatus: "done" | "open") => void;
+  markingTaskId?: string | null;
+  canEdit?: boolean;
+}
+
+function ActivityItem({ activity, onUpdateTaskStatus, markingTaskId, canEdit }: ActivityItemProps) {
   const p = activity.payload ?? {};
   const m = activity.metadata ?? {};
   const type = activity.type;
+  const taskStatus = type === "task" ? String(p.status ?? "").toLowerCase() : "";
+  const isDone = taskStatus === "done";
+  const showTaskActions = type === "task" && canEdit && onUpdateTaskStatus;
+  const isMarking = markingTaskId === activity.id;
 
   const renderPayload = () => {
     switch (type) {
@@ -209,7 +220,7 @@ function ActivityItem({ activity }: { activity: Activity }) {
         return (
           <div className="space-y-1 text-sm">
             <p className="font-medium text-gray-900">{String(p.title ?? "")}</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {p.status != null && p.status !== "" ? (
                 <span className={`rounded px-1.5 py-0.5 text-xs ${String(p.status) === "done" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>
                   {String(p.status)}
@@ -218,6 +229,26 @@ function ActivityItem({ activity }: { activity: Activity }) {
               {p.dueAt != null && p.dueAt !== "" ? (
                 <span className="text-gray-500">Due: {new Date(String(p.dueAt)).toLocaleDateString()}</span>
               ) : null}
+              {showTaskActions && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateTaskStatus?.(
+                      activity.id,
+                      (activity.payload as Record<string, unknown>) ?? {},
+                      isDone ? "open" : "done"
+                    )
+                  }
+                  disabled={isMarking}
+                  className={
+                    isDone
+                      ? "rounded border border-gray-500 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      : "rounded border border-emerald-600 bg-white px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                  }
+                >
+                  {isMarking ? "Updating…" : isDone ? "Re-open" : "Mark Done"}
+                </button>
+              )}
             </div>
           </div>
         );
@@ -312,12 +343,35 @@ function ActivityItem({ activity }: { activity: Activity }) {
           </div>
         );
       }
+      case "ai_deal_brief": {
+        const brief = String(p.briefMarkdown ?? "");
+        const generatedAt = p.generatedAt != null ? String(p.generatedAt) : null;
+        const confidence = p.confidence != null ? String(p.confidence) : null;
+        return (
+          <div className="space-y-2">
+            <span className="inline-block rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">
+              AI Deal Brief
+            </span>
+            {generatedAt && (
+              <p className="text-xs text-gray-500">
+                Generated {new Date(generatedAt).toLocaleDateString()} at{" "}
+                {new Date(generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            )}
+            <p className="text-sm text-gray-700 line-clamp-4 whitespace-pre-wrap">{brief || "Deal brief generated."}</p>
+            {confidence && (
+              <p className="text-xs text-gray-500">AI Confidence: {confidence}</p>
+            )}
+          </div>
+        );
+      }
       case "stage_change": {
         const fromStage = String(p.fromStage ?? "—");
         const toStage = String(p.toStage ?? "—");
         const reason = p.reason ? String(p.reason) : null;
         const competitor = p.competitor ? String(p.competitor) : null;
-        const notes = p.notes ? String(p.notes) : null;
+        const notesRaw = p.notes ?? p.note;
+        const notes = notesRaw != null && String(notesRaw).trim() !== "" ? String(notesRaw) : null;
         return (
           <div className="space-y-1 text-sm text-gray-700">
             <p>
@@ -331,7 +385,12 @@ function ActivityItem({ activity }: { activity: Activity }) {
                 {competitor ? `Competitor: ${competitor}` : ""}
               </p>
             )}
-            {notes && <p className="line-clamp-2">{notes}</p>}
+            {notes && (
+              <div className="mt-1.5 rounded border border-gray-200 bg-gray-50 px-2.5 py-2">
+                <p className="text-xs font-medium text-gray-600">Note</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-gray-800">{notes}</p>
+              </div>
+            )}
           </div>
         );
       }
@@ -512,6 +571,36 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
     setTimeout(() => setToast(null), 4000);
   };
 
+  const [markingTaskId, setMarkingTaskId] = useState<string | null>(null);
+  const handleUpdateTaskStatus = useCallback(
+    async (
+      activityId: string,
+      currentPayload: Record<string, unknown>,
+      newStatus: "done" | "open"
+    ) => {
+      setMarkingTaskId(activityId);
+      try {
+        await apiFetch(`/activities/${activityId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ payload: { ...currentPayload, status: newStatus } }),
+        });
+        setPage(1);
+        fetchActivities();
+        setToast({
+          type: "success",
+          message: newStatus === "done" ? "Task marked done." : "Task re-opened.",
+        });
+        setTimeout(() => setToast(null), 3000);
+      } catch {
+        setToast({ type: "error", message: "Failed to update task." });
+        setTimeout(() => setToast(null), 4000);
+      } finally {
+        setMarkingTaskId(null);
+      }
+    },
+    [fetchActivities]
+  );
+
   return (
     <div className="mt-4 border-t border-gray-200 pt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -593,13 +682,21 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
 
       {loading ? (
         <p className="mt-3 text-sm text-gray-500">Loading activities...</p>
-      ) : !data || data.data.length === 0 ? (
-        <p className="mt-3 text-sm text-gray-500">No activities yet. Add one to get started.</p>
-      ) : (
+      ) : (() => {
+        const activitiesToShow = (data?.data ?? []).filter((a) => a.type !== "ai_deal_brief");
+        return activitiesToShow.length === 0 ? (
+          <p className="mt-3 text-sm text-gray-500">No activities yet. Add one to get started.</p>
+        ) : (
         <>
           <div className="mt-3 space-y-0">
-            {data.data.map((activity) => (
-              <ActivityItem key={activity.id} activity={activity} />
+            {activitiesToShow.map((activity) => (
+              <ActivityItem
+                key={activity.id}
+                activity={activity}
+                onUpdateTaskStatus={canEdit ? handleUpdateTaskStatus : undefined}
+                markingTaskId={markingTaskId}
+                canEdit={canEdit}
+              />
             ))}
           </div>
           <div className="mt-3">
@@ -615,7 +712,8 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
             />
           </div>
         </>
-      )}
+        );
+      })()}
 
       <AddActivityModal
         isOpen={addModalOpen}
