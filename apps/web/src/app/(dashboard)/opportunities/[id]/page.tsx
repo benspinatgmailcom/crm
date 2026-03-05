@@ -39,6 +39,9 @@ interface Opportunity {
   healthScore?: number;
   healthStatus?: "healthy" | "warning" | "critical";
   healthSignals?: HealthSignal[];
+  winProbability?: number | null;
+  forecastCategory?: string | null;
+  expectedRevenue?: { toString(): string } | null;
 }
 
 interface Account {
@@ -112,6 +115,17 @@ function formatDays(value: number | null | undefined): string {
 
 function healthStatusLabel(status: "healthy" | "warning" | "critical"): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function forecastCategoryLabel(cat: string | null | undefined): string {
+  if (cat == null || cat === "") return "—";
+  const labels: Record<string, string> = {
+    pipeline: "Pipeline",
+    best_case: "Best case",
+    commit: "Commit",
+    closed: "Closed",
+  };
+  return labels[cat] ?? cat;
 }
 
 export default function OpportunityDetailPage() {
@@ -352,6 +366,8 @@ export default function OpportunityDetailPage() {
       stage: opportunity.stage || "prospecting",
       probability: opportunity.probability ?? undefined,
       closeDate: opportunity.closeDate ? opportunity.closeDate.slice(0, 10) : "",
+      winProbability: opportunity.winProbability ?? undefined,
+      forecastCategory: (opportunity.forecastCategory as "pipeline" | "best_case" | "commit" | "closed") ?? undefined,
     });
     setFormErrors({});
     setSubmitError(null);
@@ -370,6 +386,8 @@ export default function OpportunityDetailPage() {
       stage: formData.stage || undefined,
       probability: formData.probability,
       closeDate: formData.closeDate || undefined,
+      winProbability: formData.winProbability,
+      forecastCategory: formData.forecastCategory,
     };
     const parsed = opportunitySchema.safeParse(payload);
     if (!parsed.success) {
@@ -392,6 +410,8 @@ export default function OpportunityDetailPage() {
           stage: parsed.data.stage,
           probability: parsed.data.probability,
           closeDate: parsed.data.closeDate,
+          winProbability: parsed.data.winProbability,
+          forecastCategory: parsed.data.forecastCategory,
         }),
       });
       setEditModalOpen(false);
@@ -829,6 +849,20 @@ export default function OpportunityDetailPage() {
                   {opportunity.closeDate ? new Date(opportunity.closeDate).toLocaleDateString() : "—"}
                 </dd>
               </div>
+              <div>
+                <dt className="text-gray-500">Win probability</dt>
+                <dd className="text-gray-900">
+                  {opportunity.winProbability != null ? `${opportunity.winProbability}%` : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Forecast category</dt>
+                <dd className="text-gray-900">{forecastCategoryLabel(opportunity.forecastCategory)}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Expected revenue</dt>
+                <dd className="text-gray-900">{formatAmount(opportunity.expectedRevenue)}</dd>
+              </div>
               {opportunity.sourceLeadId && (
                 <div>
                   <dt className="text-gray-500">Created from Lead</dt>
@@ -987,6 +1021,44 @@ export default function OpportunityDetailPage() {
                 }
                 className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Win probability %</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={formData.winProbability ?? ""}
+                onChange={(e) =>
+                  setFormData((d) => ({
+                    ...d,
+                    winProbability: e.target.value ? Number(e.target.value) : undefined,
+                  }))
+                }
+                placeholder="Engine-computed if blank"
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Forecast category</label>
+              <select
+                value={formData.forecastCategory ?? ""}
+                onChange={(e) =>
+                  setFormData((d) => ({
+                    ...d,
+                    forecastCategory: e.target.value
+                      ? (e.target.value as "pipeline" | "best_case" | "commit" | "closed")
+                      : undefined,
+                  }))
+                }
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">—</option>
+                <option value="pipeline">Pipeline</option>
+                <option value="best_case">Best case</option>
+                <option value="commit">Commit</option>
+                <option value="closed">Closed</option>
+              </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

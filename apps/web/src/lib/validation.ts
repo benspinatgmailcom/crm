@@ -25,6 +25,8 @@ export const leadSchema = z.object({
   source: z.string().max(50).optional(),
 });
 
+const forecastCategoryEnum = z.enum(["pipeline", "best_case", "commit", "closed"]);
+
 export const opportunitySchema = z.object({
   accountId: z.string().min(1, "Account is required"),
   name: z.string().min(1, "Name is required").max(255),
@@ -32,6 +34,8 @@ export const opportunitySchema = z.object({
   stage: z.string().max(50).optional(),
   probability: z.coerce.number().int().min(0).max(100).optional(),
   closeDate: z.string().optional(),
+  winProbability: z.coerce.number().int().min(0).max(100).optional(),
+  forecastCategory: forecastCategoryEnum.optional(),
 });
 
 export type AccountFormData = z.infer<typeof accountSchema>;

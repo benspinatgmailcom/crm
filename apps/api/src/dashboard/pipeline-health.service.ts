@@ -3,6 +3,7 @@ import { User } from '@crm/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '../auth/constants';
 import { computeHealthScore } from '../opportunity/health-scoring';
+import { evaluateForecast } from '../forecast-engine/forecast-engine.evaluate';
 import type { PipelineHealthQueryDto } from './dto/pipeline-health-query.dto';
 
 const OPEN_STAGES = ['prospecting', 'qualification', 'discovery', 'proposal', 'negotiation'] as const;
@@ -73,6 +74,33 @@ export interface PipelineHealthResponse {
       healthStatus: 'healthy' | 'warning' | 'critical';
       healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
       followup: { hasSuggestion: boolean; hasOpenTask: boolean; hasDraft: boolean };
+      winProbability: number;
+      forecastCategory: string;
+      expectedRevenue: number | null;
+      forecastDrivers?: Array<{ code: string; label: string; impact: number }>;
+    }>;
+  };
+  forecast: {
+    totalAmount: number;
+    weightedPipeline: number;
+    commitAmount: number;
+    commitWeighted: number;
+    bestCaseAmount: number;
+    bestCaseWeighted: number;
+    byOwner: Array<{
+      ownerId: string;
+      ownerName: string;
+      pipelineAmount: number;
+      bestCaseAmount: number;
+      commitAmount: number;
+      weightedTotal: number;
+    }>;
+    byStage: Array<{
+      stage: string;
+      pipelineAmount: number;
+      bestCaseAmount: number;
+      commitAmount: number;
+      weightedTotal: number;
     }>;
   };
 }
@@ -92,6 +120,10 @@ interface EnrichedOpp {
   healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
   isOverdue: boolean;
   isStaleTouch: boolean;
+  winProbability: number;
+  forecastCategory: string;
+  expectedRevenue: number | null;
+  forecastDrivers: Array<{ code: string; label: string; impact: number }>;
 }
 
 @Injectable()
@@ -162,6 +194,21 @@ export class PipelineHealthService {
         nextFollowUpAt: o.nextFollowUpAt,
         now,
       });
+      const amountNum = o.amount != null ? toNumber(o.amount) : null;
+      const forecast = evaluateForecast(
+        {
+          stage: o.stage ?? 'prospecting',
+          amount: amountNum,
+          closeDate: null,
+          daysSinceLastTouch,
+          daysInStage,
+          healthScore: health.healthScore,
+          healthStatus: health.healthStatus,
+          healthSignals: health.healthSignals,
+          nextFollowUpAt: o.nextFollowUpAt,
+        },
+        now,
+      );
       const isOverdue =
         o.nextFollowUpAt != null && o.nextFollowUpAt < now;
       const isStaleTouch =
@@ -182,6 +229,10 @@ export class PipelineHealthService {
         healthSignals: health.healthSignals,
         isOverdue,
         isStaleTouch,
+        winProbability: forecast.winProbability,
+        forecastCategory: forecast.forecastCategory,
+        expectedRevenue: forecast.expectedRevenue,
+        forecastDrivers: forecast.drivers,
       };
     });
 
@@ -256,6 +307,80 @@ export class PipelineHealthService {
       avgDaysInStage:
         v.daysInStageCount > 0 ? v.daysInStageSum / v.daysInStageCount : null,
       criticalPct: v.deals > 0 ? (v.critical / v.deals) * 100 : 0,
+    }));
+
+    // Forecast rollups from filtered
+    const weightedPipeline = filtered.reduce((s, o) => s + (o.expectedRevenue ?? 0), 0);
+    const commitFiltered = filtered.filter((o) => o.forecastCategory === 'commit');
+    const bestCaseFiltered = filtered.filter(
+      (o) => o.forecastCategory === 'best_case' || o.forecastCategory === 'commit',
+    );
+    const forecastSummary = {
+      totalAmount: filtered.reduce((s, o) => s + toNumber(o.amount), 0),
+      weightedPipeline,
+      commitAmount: commitFiltered.reduce((s, o) => s + toNumber(o.amount), 0),
+      commitWeighted: commitFiltered.reduce((s, o) => s + (o.expectedRevenue ?? 0), 0),
+      bestCaseAmount: bestCaseFiltered.reduce((s, o) => s + toNumber(o.amount), 0),
+      bestCaseWeighted: bestCaseFiltered.reduce((s, o) => s + (o.expectedRevenue ?? 0), 0),
+    };
+
+    const forecastByOwnerMap = new Map<
+      string,
+      { ownerName: string; pipelineAmount: number; bestCaseAmount: number; commitAmount: number; weightedTotal: number }
+    >();
+    for (const o of filtered) {
+      const cur = forecastByOwnerMap.get(o.ownerId) ?? {
+        ownerName: o.ownerEmail,
+        pipelineAmount: 0,
+        bestCaseAmount: 0,
+        commitAmount: 0,
+        weightedTotal: 0,
+      };
+      cur.pipelineAmount += toNumber(o.amount);
+      cur.weightedTotal += o.expectedRevenue ?? 0;
+      if (o.forecastCategory === 'commit') {
+        cur.commitAmount += toNumber(o.amount);
+      }
+      if (o.forecastCategory === 'best_case' || o.forecastCategory === 'commit') {
+        cur.bestCaseAmount += toNumber(o.amount);
+      }
+      forecastByOwnerMap.set(o.ownerId, cur);
+    }
+    const forecastByOwner = Array.from(forecastByOwnerMap.entries()).map(([ownerId, v]) => ({
+      ownerId,
+      ownerName: v.ownerName,
+      pipelineAmount: v.pipelineAmount,
+      bestCaseAmount: v.bestCaseAmount,
+      commitAmount: v.commitAmount,
+      weightedTotal: v.weightedTotal,
+    }));
+
+    const forecastByStageMap = new Map<
+      string,
+      { pipelineAmount: number; bestCaseAmount: number; commitAmount: number; weightedTotal: number }
+    >();
+    for (const o of filtered) {
+      const stage = o.stage ?? '_other';
+      const cur = forecastByStageMap.get(stage) ?? {
+        pipelineAmount: 0,
+        bestCaseAmount: 0,
+        commitAmount: 0,
+        weightedTotal: 0,
+      };
+      cur.pipelineAmount += toNumber(o.amount);
+      cur.weightedTotal += o.expectedRevenue ?? 0;
+      if (o.forecastCategory === 'commit') cur.commitAmount += toNumber(o.amount);
+      if (o.forecastCategory === 'best_case' || o.forecastCategory === 'commit') {
+        cur.bestCaseAmount += toNumber(o.amount);
+      }
+      forecastByStageMap.set(stage, cur);
+    }
+    const forecastByStage = Array.from(forecastByStageMap.entries()).map(([stage, v]) => ({
+      stage,
+      pipelineAmount: v.pipelineAmount,
+      bestCaseAmount: v.bestCaseAmount,
+      commitAmount: v.commitAmount,
+      weightedTotal: v.weightedTotal,
     }));
 
     const sortFn = (a: EnrichedOpp, b: EnrichedOpp): number => {
@@ -407,7 +532,17 @@ export class PipelineHealthService {
           hasOpenTask: false,
           hasDraft: false,
         },
+        winProbability: o.winProbability,
+        forecastCategory: o.forecastCategory,
+        expectedRevenue: o.expectedRevenue,
+        forecastDrivers: o.forecastDrivers,
       })),
+    };
+
+    const forecast = {
+      ...forecastSummary,
+      byOwner: forecastByOwner,
+      byStage: forecastByStage,
     };
 
     return {
@@ -425,6 +560,7 @@ export class PipelineHealthService {
       topDrivers,
       byStage,
       queue,
+      forecast,
     };
   }
 }

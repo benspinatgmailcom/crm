@@ -7,8 +7,10 @@ import {
 import { Opportunity, Prisma, User } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
 import { ActivityService } from '../activity/activity.service';
+import { OpportunityForecastService } from '../forecast-engine/opportunity-forecast.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '../auth/constants';
+import { evaluateForecast } from '../forecast-engine/forecast-engine.evaluate';
 import { computeHealthScore } from './health-scoring';
 import { CreateOpportunityDto } from './dto/create-opportunity.dto';
 import { QueryOpportunityDto } from './dto/query-opportunity.dto';
@@ -19,6 +21,7 @@ export class OpportunityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
+    private readonly forecastService: OpportunityForecastService,
   ) {}
 
   async create(dto: CreateOpportunityDto, currentUser: User): Promise<Opportunity> {
@@ -38,7 +41,7 @@ export class OpportunityService {
     if (!owner) throw new NotFoundException(`User ${ownerId} not found`);
     if (!owner.isActive) throw new BadRequestException('Cannot assign opportunity to an inactive user');
 
-    return await this.prisma.opportunity.create({
+    const created = await this.prisma.opportunity.create({
       data: {
         accountId: dto.accountId,
         name: dto.name,
@@ -49,6 +52,10 @@ export class OpportunityService {
         ownerId,
       },
     });
+    await this.forecastService.recomputeForecast(created.id).catch(() => {
+      /* non-fatal; values can be backfilled */
+    });
+    return created;
   }
 
   private static readonly PIPELINE_STAGES = [
@@ -70,6 +77,7 @@ export class OpportunityService {
   async getPipeline(
     currentUser: User,
     ownerFilter?: string,
+    forecastCategory?: string,
   ): Promise<Record<string, Array<{
     id: string;
     name: string;
@@ -85,6 +93,9 @@ export class OpportunityService {
     healthScore: number;
     healthStatus: 'healthy' | 'warning' | 'critical';
     healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+    winProbability: number;
+    forecastCategory: string;
+    expectedRevenue: number | null;
   }>>> {
     const isAdmin = currentUser.role === Role.ADMIN;
     const ownerWhere: Prisma.OpportunityWhereInput = {};
@@ -100,8 +111,13 @@ export class OpportunityService {
       ownerWhere.ownerId = raw;
     }
 
+    const where: Prisma.OpportunityWhereInput = { ...ownerWhere };
+    if (forecastCategory?.trim()) {
+      where.forecastCategory = forecastCategory.trim();
+    }
+
     const opportunities = await this.prisma.opportunity.findMany({
-      where: ownerWhere,
+      where,
       select: {
         id: true,
         name: true,
@@ -134,6 +150,9 @@ export class OpportunityService {
       healthScore: number;
       healthStatus: 'healthy' | 'warning' | 'critical';
       healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+      winProbability: number;
+      forecastCategory: string;
+      expectedRevenue: number | null;
     }>> = {};
     for (const s of OpportunityService.PIPELINE_STAGES) {
       result[s] = [];
@@ -151,6 +170,21 @@ export class OpportunityService {
         nextFollowUpAt: o.nextFollowUpAt,
         now,
       });
+      const amountNum = o.amount != null ? Number(o.amount.toString()) : null;
+      const forecast = evaluateForecast(
+        {
+          stage: o.stage ?? 'prospecting',
+          amount: amountNum,
+          closeDate: o.closeDate,
+          daysSinceLastTouch,
+          daysInStage,
+          healthScore: health.healthScore,
+          healthStatus: health.healthStatus,
+          healthSignals: health.healthSignals,
+          nextFollowUpAt: o.nextFollowUpAt,
+        },
+        now,
+      );
       const entry = {
         id: o.id,
         name: o.name,
@@ -166,6 +200,9 @@ export class OpportunityService {
         healthScore: health.healthScore,
         healthStatus: health.healthStatus,
         healthSignals: health.healthSignals,
+        winProbability: forecast.winProbability,
+        forecastCategory: forecast.forecastCategory,
+        expectedRevenue: forecast.expectedRevenue,
       };
       if (OpportunityService.PIPELINE_STAGES.includes(stage as (typeof OpportunityService.PIPELINE_STAGES)[number])) {
         result[stage].push(entry);
@@ -243,6 +280,9 @@ export class OpportunityService {
       healthScore: number;
       healthStatus: 'healthy' | 'warning' | 'critical';
       healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+      winProbability: number | null;
+      forecastCategory: string | null;
+      expectedRevenue: { toString(): string } | null;
     }
   > {
     const opportunity = await this.prisma.opportunity.findUnique({
@@ -262,6 +302,9 @@ export class OpportunityService {
         nextFollowUpAt: true,
         healthScore: true,
         healthSignals: true,
+        winProbability: true,
+        forecastCategory: true,
+        expectedRevenue: true,
         createdAt: true,
         updatedAt: true,
         owner: { select: { id: true, email: true } },
@@ -292,6 +335,9 @@ export class OpportunityService {
       healthScore: number;
       healthStatus: 'healthy' | 'warning' | 'critical';
       healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
+      winProbability: number | null;
+      forecastCategory: string | null;
+      expectedRevenue: { toString(): string } | null;
     };
   }
 
@@ -321,7 +367,7 @@ export class OpportunityService {
       dto.stage !== undefined && dto.stage !== current.stage;
     const now = new Date();
 
-    const { ownerId, ...restDto } = dto;
+    const { ownerId, winProbability: dtoWinProb, forecastCategory: dtoCategory, ...restDto } = dto;
     const updateData: Prisma.OpportunityUpdateInput = {
       ...restDto,
       amount: dto.amount !== undefined ? dto.amount : undefined,
@@ -331,6 +377,16 @@ export class OpportunityService {
       }),
     };
     if (ownerId !== undefined) updateData.owner = { connect: { id: ownerId } };
+
+    if (dtoWinProb !== undefined) {
+      updateData.winProbability = dtoWinProb;
+      const amountRaw = dto.amount !== undefined ? dto.amount : current.amount;
+      const amountNum = amountRaw != null ? Number(amountRaw.toString()) : null;
+      updateData.expectedRevenue = amountNum != null ? amountNum * (dtoWinProb / 100) : null;
+    }
+    if (dtoCategory !== undefined) {
+      updateData.forecastCategory = dtoCategory;
+    }
 
     const updated = await this.prisma.opportunity.update({
       where: { id },
@@ -346,6 +402,12 @@ export class OpportunityService {
       });
     }
 
+    const userOverrodeForecast = dtoWinProb !== undefined || dtoCategory !== undefined;
+    if (!userOverrodeForecast) {
+      await this.forecastService.recomputeForecast(id).catch(() => {
+        /* non-fatal; values can be backfilled */
+      });
+    }
     return updated;
   }
 

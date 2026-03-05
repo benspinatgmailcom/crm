@@ -39,6 +39,7 @@ interface PipelineOpportunity {
   healthScore?: number;
   healthStatus?: "healthy" | "warning" | "critical";
   healthSignals?: HealthSignal[];
+  forecastCategory?: string | null;
 }
 
 type PipelineData = Record<string, PipelineOpportunity[]>;
@@ -193,6 +194,16 @@ function matchesCloseFilter(
 
 type AgingFilter = "all" | "stale" | "atRisk";
 
+type ForecastCategoryFilter = "all" | "pipeline" | "best_case" | "commit" | "closed";
+
+const FORECAST_OPTIONS: { value: ForecastCategoryFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "pipeline", label: "Pipeline" },
+  { value: "best_case", label: "Best case" },
+  { value: "commit", label: "Commit" },
+  { value: "closed", label: "Closed" },
+];
+
 function applyFilters(
   raw: PipelineData,
   filters: {
@@ -203,9 +214,10 @@ function applyFilters(
     includeClosed: boolean;
     agingFilter: AgingFilter;
     healthStatus: HealthFilter;
+    forecastCategory: ForecastCategoryFilter;
   }
 ): PipelineData {
-  const { close, min, max, account, includeClosed, agingFilter, healthStatus } = filters;
+  const { close, min, max, account, includeClosed, agingFilter, healthStatus, forecastCategory } = filters;
   const accountLower = account.trim().toLowerCase();
   const minVal = min === "" ? -Infinity : Number(min);
   const maxVal = max === "" ? Infinity : Number(max);
@@ -232,6 +244,10 @@ function applyFilters(
         if (agingFilter === "stale" && !isStale(o)) return false;
         if (agingFilter === "atRisk" && !isApproachingStale(o)) return false;
         if (healthStatus !== "all" && o.healthStatus !== healthStatus) return false;
+        if (forecastCategory !== "all") {
+          const oppCat = o.forecastCategory ?? "";
+          if (oppCat !== forecastCategory) return false;
+        }
         return true;
       });
     }
@@ -776,6 +792,7 @@ const DEFAULT_FILTERS = {
   includeClosed: false,
   agingFilter: "all" as AgingFilter,
   healthStatus: "all" as HealthFilter,
+  forecastCategory: "all" as ForecastCategoryFilter,
   ownerFilter: "me" as OwnerFilter,
 };
 
@@ -799,11 +816,13 @@ export default function PipelinePage() {
     const closed = searchParams.get("closed");
     const aging = searchParams.get("aging");
     const health = searchParams.get("health");
+    const forecast = searchParams.get("forecast");
     const owner = searchParams.get("owner");
     const minNum = minRaw != null && minRaw !== "" ? Number(minRaw) : NaN;
     const maxNum = maxRaw != null && maxRaw !== "" ? Number(maxRaw) : NaN;
     const agingValid = AGING_OPTIONS.some((o) => o.value === aging);
     const healthValid = HEALTH_OPTIONS.some((o) => o.value === health);
+    const forecastValid = FORECAST_OPTIONS.some((o) => o.value === forecast);
     const defaultOwner: OwnerFilter = searchParams.get("owner") == null && user?.role === "ADMIN" ? "all" : "me";
     const ownerFilter = owner === "me" || owner === "all" || (owner != null && owner !== "") ? owner : defaultOwner;
     return {
@@ -814,6 +833,7 @@ export default function PipelinePage() {
       includeClosed: closed === "1",
       agingFilter: agingValid ? (aging as AgingFilter) : "all",
       healthStatus: healthValid ? (health as HealthFilter) : "all",
+      forecastCategory: forecastValid ? (forecast as ForecastCategoryFilter) : "all",
       ownerFilter,
     };
   });
@@ -837,6 +857,8 @@ export default function PipelinePage() {
       else params.delete("aging");
       if (f.healthStatus !== "all") params.set("health", f.healthStatus);
       else params.delete("health");
+      if (f.forecastCategory !== "all") params.set("forecast", f.forecastCategory);
+      else params.delete("forecast");
       if (f.ownerFilter && f.ownerFilter !== "all") params.set("owner", f.ownerFilter);
       else if (f.ownerFilter === "all") params.set("owner", "all");
       else params.delete("owner");
@@ -890,11 +912,14 @@ export default function PipelinePage() {
   }, [data, filters]);
 
   const fetchPipeline = useCallback(
-    async (ownerFilter?: OwnerFilter) => {
+    async (ownerFilter?: OwnerFilter, forecastCategory?: ForecastCategoryFilter) => {
       setLoading(true);
       setError(null);
       try {
-        const q = ownerFilter ? `?owner=${encodeURIComponent(ownerFilter)}` : "";
+        const params = new URLSearchParams();
+        if (ownerFilter) params.set("owner", ownerFilter);
+        if (forecastCategory && forecastCategory !== "all") params.set("forecastCategory", forecastCategory);
+        const q = params.toString() ? `?${params.toString()}` : "";
         const res = await apiFetch<PipelineData>(`/opportunities/pipeline${q}`);
         setData(res ?? {});
       } catch (err: unknown) {
@@ -908,8 +933,8 @@ export default function PipelinePage() {
   );
 
   useEffect(() => {
-    fetchPipeline(filters.ownerFilter);
-  }, [fetchPipeline, filters.ownerFilter]);
+    fetchPipeline(filters.ownerFilter, filters.forecastCategory);
+  }, [fetchPipeline, filters.ownerFilter, filters.forecastCategory]);
 
   // Default admin to "all" when URL has no owner (e.g. first load after auth)
   useEffect(() => {
@@ -1141,6 +1166,7 @@ export default function PipelinePage() {
     filters.includeClosed ||
     filters.agingFilter !== "all" ||
     filters.healthStatus !== "all" ||
+    filters.forecastCategory !== "all" ||
     filters.ownerFilter !== defaultOwner;
 
   return (
@@ -1241,6 +1267,20 @@ export default function PipelinePage() {
           {HEALTH_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
               Health: {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.forecastCategory}
+          onChange={(e) =>
+            updateFilter("forecastCategory", e.target.value as ForecastCategoryFilter)
+          }
+          className="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:border-accent-1 focus:outline-none focus:ring-1 focus:ring-accent-1"
+          aria-label="Forecast category"
+        >
+          {FORECAST_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              Forecast: {o.label}
             </option>
           ))}
         </select>

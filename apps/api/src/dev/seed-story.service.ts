@@ -5,6 +5,7 @@ import { Readable } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { OpportunityForecastService } from '../forecast-engine/opportunity-forecast.service';
 import { UPLOADS_DIR } from '../attachments/uploads.constants';
 import type { SeedStoryDto } from './dto/seed-story.dto';
 import { env } from '../config/env';
@@ -66,6 +67,7 @@ export class SeedStoryService {
     private readonly prisma: PrismaService,
     private readonly activityService: ActivityService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly forecastService: OpportunityForecastService,
   ) {}
 
   async wipeCrmData(): Promise<void> {
@@ -243,6 +245,14 @@ export class SeedStoryService {
       opportunitiesCreated += fillerResult.opportunitiesCreated;
       activitiesCreated += fillerResult.activitiesCreated;
       attachmentsCreated += fillerResult.attachmentsCreated;
+    }
+
+    // Populate forecast (win probability, forecast category, expected revenue) for all opportunities
+    const allOpps = await this.prisma.opportunity.findMany({ select: { id: true } });
+    for (const opp of allOpps) {
+      await this.forecastService.recomputeForecast(opp.id).catch(() => {
+        /* non-fatal per opportunity */
+      });
     }
 
     return {

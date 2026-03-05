@@ -76,6 +76,33 @@ interface DashboardData {
       healthStatus: "healthy" | "warning" | "critical";
       healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
       followup: { hasSuggestion: boolean; hasOpenTask: boolean; hasDraft: boolean };
+      winProbability?: number;
+      forecastCategory?: string;
+      expectedRevenue?: number | null;
+      forecastDrivers?: Array<{ code: string; label: string; impact: number }>;
+    }>;
+  };
+  forecast: {
+    totalAmount: number;
+    weightedPipeline: number;
+    commitAmount: number;
+    commitWeighted: number;
+    bestCaseAmount: number;
+    bestCaseWeighted: number;
+    byOwner: Array<{
+      ownerId: string;
+      ownerName: string;
+      pipelineAmount: number;
+      bestCaseAmount: number;
+      commitAmount: number;
+      weightedTotal: number;
+    }>;
+    byStage: Array<{
+      stage: string;
+      pipelineAmount: number;
+      bestCaseAmount: number;
+      commitAmount: number;
+      weightedTotal: number;
     }>;
   };
 }
@@ -456,7 +483,92 @@ export default function PipelineHealthPage() {
             </table>
           )}
         </div>
-      </div>
+        </div>
+
+      {/* Forecast panel */}
+      <section className="mt-6">
+        <h2 className="mb-3 text-lg font-semibold text-gray-900">Forecast</h2>
+        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase text-gray-500">Total amount</p>
+            <p className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(d.forecast.totalAmount)}</p>
+          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase text-gray-500">Weighted pipeline</p>
+            <p className="mt-1 text-lg font-semibold text-gray-900">{formatCurrency(d.forecast.weightedPipeline)}</p>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase text-emerald-700">Commit amount</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-800">{formatCurrency(d.forecast.commitAmount)}</p>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase text-emerald-700">Commit weighted</p>
+            <p className="mt-1 text-lg font-semibold text-emerald-800">{formatCurrency(d.forecast.commitWeighted)}</p>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase text-amber-700">Best case amount</p>
+            <p className="mt-1 text-lg font-semibold text-amber-800">{formatCurrency(d.forecast.bestCaseAmount)}</p>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
+            <p className="text-xs font-medium uppercase text-amber-700">Best case weighted</p>
+            <p className="mt-1 text-lg font-semibold text-amber-800">{formatCurrency(d.forecast.bestCaseWeighted)}</p>
+          </div>
+        </div>
+        {admin && d.forecast.byOwner.length > 0 && (
+          <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm overflow-x-auto">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">By owner</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase text-gray-500">
+                  <th className="py-2 pr-2">Owner</th>
+                  <th className="py-2 pr-2">Pipeline $</th>
+                  <th className="py-2 pr-2">Best case $</th>
+                  <th className="py-2 pr-2">Commit $</th>
+                  <th className="py-2">Weighted total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.forecast.byOwner.map((row) => (
+                  <tr key={row.ownerId} className="border-b border-gray-100">
+                    <td className="py-2 font-medium text-gray-900">{row.ownerName || row.ownerId}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.pipelineAmount)}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.bestCaseAmount)}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.commitAmount)}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.weightedTotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {d.forecast.byStage.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm overflow-x-auto">
+            <h3 className="mb-3 text-sm font-semibold text-gray-900">By stage</h3>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase text-gray-500">
+                  <th className="py-2 pr-2">Stage</th>
+                  <th className="py-2 pr-2">Pipeline $</th>
+                  <th className="py-2 pr-2">Best case $</th>
+                  <th className="py-2 pr-2">Commit $</th>
+                  <th className="py-2">Weighted total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.forecast.byStage.map((row) => (
+                  <tr key={row.stage} className="border-b border-gray-100">
+                    <td className="py-2 font-medium text-gray-900">{row.stage}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.pipelineAmount)}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.bestCaseAmount)}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.commitAmount)}</td>
+                    <td className="py-2 text-gray-700">{formatCurrency(row.weightedTotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* At-risk queue */}
       <div className="mt-6 rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -609,6 +721,8 @@ export default function PipelineHealthPage() {
                     <th className="py-2 pr-2">Stage</th>
                     <th className="py-2 pr-2">Amount</th>
                     <th className="py-2 pr-2">Owner</th>
+                    <th className="py-2 pr-2">Close %</th>
+                    <th className="py-2 pr-2">Forecast</th>
                     <th className="py-2 pr-2">Health</th>
                     <th className="py-2">Open</th>
                   </tr>
@@ -622,6 +736,20 @@ export default function PipelineHealthPage() {
                         {item.amount != null ? formatCurrency(item.amount) : "—"}
                       </td>
                       <td className="py-2 text-gray-700">{item.owner.name ?? item.owner.email}</td>
+                      <td className="py-2 text-gray-700">
+                        {item.winProbability != null ? `${item.winProbability}%` : "—"}
+                      </td>
+                      <td className="py-2 text-gray-700">
+                        {item.forecastCategory === "commit"
+                          ? "Commit"
+                          : item.forecastCategory === "best_case"
+                            ? "Best case"
+                            : item.forecastCategory === "closed"
+                              ? "Closed"
+                              : item.forecastCategory === "pipeline"
+                                ? "Pipeline"
+                                : item.forecastCategory ?? "—"}
+                      </td>
                       <td className="py-2">
                         <span
                           className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${

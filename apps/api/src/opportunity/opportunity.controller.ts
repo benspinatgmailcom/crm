@@ -58,7 +58,7 @@ export class OpportunityController {
     healthStatus: 'healthy' | 'warning' | 'critical';
     healthSignals: Array<{ code: string; severity: string; message: string; penalty: number }>;
   }>>> {
-    return this.opportunityService.getPipeline(user, query.owner);
+    return this.opportunityService.getPipeline(user, query.owner, query.forecastCategory);
   }
 
   @Get()
