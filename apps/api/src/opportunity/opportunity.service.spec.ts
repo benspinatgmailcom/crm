@@ -31,7 +31,6 @@ describe('OpportunityService', () => {
     name: 'Deal',
     amount: 10000,
     stage: 'prospecting',
-    probability: 25,
     closeDate: null,
     sourceLeadId: null,
     ownerId: 'user-1',
@@ -111,7 +110,7 @@ describe('OpportunityService', () => {
         entityType: 'opportunity',
         entityId: 'opp-1',
         type: 'stage_change',
-        payload: { from: 'prospecting', to: 'qualification' },
+        payload: { fromStage: 'prospecting', toStage: 'qualification' },
       });
       expect(result.lastStageChangedAt).toBeDefined();
     });

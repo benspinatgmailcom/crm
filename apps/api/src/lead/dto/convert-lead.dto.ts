@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, IsNumber, Min, IsDateString } from 'class-validator';
 
 export class ConvertLeadDto {
   @ApiPropertyOptional({ description: 'Account name (default: lead company or lead name)' })
@@ -13,4 +13,21 @@ export class ConvertLeadDto {
   @IsString()
   @MaxLength(255)
   opportunityName?: string;
+
+  @ApiPropertyOptional({ description: 'Opportunity amount' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  opportunityAmount?: number;
+
+  @ApiPropertyOptional({ description: 'Opportunity close date (ISO 8601)' })
+  @IsOptional()
+  @IsDateString()
+  opportunityCloseDate?: string;
+
+  @ApiPropertyOptional({ description: 'Opportunity stage (default: prospecting)' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  opportunityStage?: string;
 }

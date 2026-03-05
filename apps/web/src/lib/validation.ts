@@ -32,7 +32,6 @@ export const opportunitySchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
   amount: z.coerce.number().min(0).optional(),
   stage: z.string().max(50).optional(),
-  probability: z.coerce.number().int().min(0).max(100).optional(),
   closeDate: z.string().optional(),
   winProbability: z.coerce.number().int().min(0).max(100).optional(),
   forecastCategory: forecastCategoryEnum.optional(),

@@ -131,14 +131,17 @@ export class LeadService {
         },
       });
 
+      const opportunityData = {
+        accountId: account.id,
+        name: opportunityName,
+        stage: dto?.opportunityStage?.trim() || 'prospecting',
+        sourceLeadId: lead.id,
+        ownerId,
+        ...(dto?.opportunityAmount != null && !Number.isNaN(Number(dto.opportunityAmount)) && { amount: dto.opportunityAmount }),
+        ...(dto?.opportunityCloseDate && { closeDate: new Date(dto.opportunityCloseDate) }),
+      };
       const opportunity = await tx.opportunity.create({
-        data: {
-          accountId: account.id,
-          name: opportunityName,
-          stage: 'prospecting',
-          sourceLeadId: lead.id,
-          ownerId,
-        },
+        data: opportunityData,
       });
 
       const taskPayload = {

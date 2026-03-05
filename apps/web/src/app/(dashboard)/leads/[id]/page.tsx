@@ -51,6 +51,9 @@ export default function LeadDetailPage() {
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [convertAccountName, setConvertAccountName] = useState("");
   const [convertOpportunityName, setConvertOpportunityName] = useState("");
+  const [convertOpportunityAmount, setConvertOpportunityAmount] = useState("");
+  const [convertOpportunityCloseDate, setConvertOpportunityCloseDate] = useState("");
+  const [convertOpportunityStage, setConvertOpportunityStage] = useState("prospecting");
   const [converting, setConverting] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
   const [formData, setFormData] = useState<LeadFormData>({
@@ -89,6 +92,11 @@ export default function LeadDetailPage() {
     setConvertOpportunityName(
       lead?.company ? `${lead.company} - New opportunity` : `Opportunity from ${lead?.name || ""}`
     );
+    const defaultClose = new Date();
+    defaultClose.setDate(defaultClose.getDate() + 30);
+    setConvertOpportunityCloseDate(defaultClose.toISOString().slice(0, 10));
+    setConvertOpportunityStage("prospecting");
+    setConvertOpportunityAmount("");
     setConvertError(null);
     setConvertModalOpen(true);
   };
@@ -99,9 +107,19 @@ export default function LeadDetailPage() {
     setConverting(true);
     setConvertError(null);
     try {
-      const body: { accountName?: string; opportunityName?: string } = {};
+      const body: {
+        accountName?: string;
+        opportunityName?: string;
+        opportunityAmount?: number;
+        opportunityCloseDate?: string;
+        opportunityStage?: string;
+      } = {};
       if (convertAccountName.trim()) body.accountName = convertAccountName.trim();
       if (convertOpportunityName.trim()) body.opportunityName = convertOpportunityName.trim();
+      const amountNum = convertOpportunityAmount.trim() ? Number(convertOpportunityAmount) : undefined;
+      if (amountNum != null && !Number.isNaN(amountNum)) body.opportunityAmount = amountNum;
+      if (convertOpportunityCloseDate.trim()) body.opportunityCloseDate = convertOpportunityCloseDate.trim();
+      if (convertOpportunityStage.trim()) body.opportunityStage = convertOpportunityStage.trim();
       await apiFetch<ConvertLeadResult>(`/leads/${lead.id}/convert`, {
         method: "POST",
         body: JSON.stringify(body),
@@ -340,8 +358,8 @@ export default function LeadDetailPage() {
         <form onSubmit={handleConvert} className="space-y-4">
           {convertError && <p className="text-sm text-red-600">{convertError}</p>}
           <p className="text-sm text-gray-600">
-            Create an Account, Contact, and Opportunity from this lead. An initial task &quot;Schedule
-            discovery call&quot; will be added to the Opportunity timeline.
+            Create an Account and Contact from this lead, and optionally create an Opportunity with the
+            details below. An initial task &quot;Schedule discovery call&quot; will be added to the Opportunity.
           </p>
           <div>
             <label className="block text-sm font-medium text-gray-700">Account name</label>
@@ -352,16 +370,61 @@ export default function LeadDetailPage() {
               className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Opportunity name</label>
-            <input
-              value={convertOpportunityName}
-              onChange={(e) => setConvertOpportunityName(e.target.value)}
-              placeholder={
-                lead?.company ? `${lead.company} - New opportunity` : `Opportunity from ${lead?.name || ""}`
-              }
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
+          <div className="border-t border-gray-200 pt-4">
+            <h4 className="text-sm font-medium text-gray-800">Create opportunity</h4>
+            <p className="mt-0.5 text-xs text-gray-500">
+              An opportunity will be created and linked to the new account. Set name, amount, close date, and stage.
+            </p>
+            <div className="mt-3 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Opportunity name</label>
+                <input
+                  value={convertOpportunityName}
+                  onChange={(e) => setConvertOpportunityName(e.target.value)}
+                  placeholder={
+                    lead?.company ? `${lead.company} - New opportunity` : `Opportunity from ${lead?.name || ""}`
+                  }
+                  className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Amount</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={convertOpportunityAmount}
+                    onChange={(e) => setConvertOpportunityAmount(e.target.value)}
+                    placeholder="Optional"
+                    className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Close date</label>
+                  <input
+                    type="date"
+                    value={convertOpportunityCloseDate}
+                    onChange={(e) => setConvertOpportunityCloseDate(e.target.value)}
+                    className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Stage</label>
+                <select
+                  value={convertOpportunityStage}
+                  onChange={(e) => setConvertOpportunityStage(e.target.value)}
+                  className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="prospecting">Prospecting</option>
+                  <option value="qualification">Qualification</option>
+                  <option value="discovery">Discovery</option>
+                  <option value="proposal">Proposal</option>
+                  <option value="negotiation">Negotiation</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button

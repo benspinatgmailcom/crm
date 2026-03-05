@@ -121,9 +121,47 @@ export class AiSummaryPayloadDto {
   sources?: Record<string, unknown>;
 }
 
+export class AiDealBriefPayloadDto {
+  @ApiPropertyOptional({ description: 'Deal brief markdown body' })
+  @IsOptional()
+  @IsString()
+  briefMarkdown?: string;
+
+  @ApiPropertyOptional({ description: 'Generated at (ISO string)' })
+  @IsOptional()
+  @IsString()
+  generatedAt?: string;
+
+  @ApiPropertyOptional({ description: 'User ID that triggered generation' })
+  @IsOptional()
+  @IsString()
+  createdBy?: string;
+
+  @ApiPropertyOptional({ description: 'Lookback days used' })
+  @IsOptional()
+  @IsNumber()
+  lookbackDays?: number;
+
+  @ApiPropertyOptional({ description: 'Model used' })
+  @IsOptional()
+  @IsString()
+  model?: string;
+
+  @ApiPropertyOptional({ description: 'Input truncation stats' })
+  @IsOptional()
+  @IsObject()
+  inputTruncationStats?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ description: 'AI confidence', enum: ['Low', 'Medium', 'High'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['Low', 'Medium', 'High'])
+  confidence?: 'Low' | 'Medium' | 'High';
+}
+
 export const PAYLOAD_DTO_MAP: Record<
   string,
-  new (...args: unknown[]) => NotePayloadDto | CallPayloadDto | MeetingPayloadDto | EmailPayloadDto | TaskPayloadDto | StageChangePayloadDto | AiSummaryPayloadDto
+  new (...args: unknown[]) => NotePayloadDto | CallPayloadDto | MeetingPayloadDto | EmailPayloadDto | TaskPayloadDto | StageChangePayloadDto | AiSummaryPayloadDto | AiDealBriefPayloadDto
 > = {
   note: NotePayloadDto,
   call: CallPayloadDto,
@@ -131,5 +169,6 @@ export const PAYLOAD_DTO_MAP: Record<
   email: EmailPayloadDto,
   task: TaskPayloadDto,
   ai_summary: AiSummaryPayloadDto,
+  ai_deal_brief: AiDealBriefPayloadDto,
   stage_change: StageChangePayloadDto,
 };

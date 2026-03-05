@@ -30,4 +30,16 @@ export class UpdateOpportunityDto extends Base {
   @IsString()
   @IsIn(FORECAST_CATEGORIES)
   forecastCategory?: (typeof FORECAST_CATEGORIES)[number];
+
+  /** Required when setting stage to closed-lost. Stored in the stage_change activity payload. */
+  @ApiPropertyOptional({ description: 'Reason for loss (required when stage is closed-lost)' })
+  @IsOptional()
+  @IsString()
+  lostReason?: string;
+
+  /** Optional note when closing as lost. Stored in the stage_change activity payload. Required when lostReason is "Other". */
+  @ApiPropertyOptional({ description: 'Note for loss (required when reason is Other)' })
+  @IsOptional()
+  @IsString()
+  lostNotes?: string;
 }

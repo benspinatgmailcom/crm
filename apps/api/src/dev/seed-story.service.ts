@@ -20,6 +20,7 @@ export interface SeedStoryResult {
   accountsCreated: number;
   contactsCreated: number;
   opportunitiesCreated: number;
+  leadsCreated: number;
   activitiesCreated: number;
   attachmentsCreated: number;
   storyAccountIds: { apexId: string; northwindId: string; globexId: string };
@@ -72,6 +73,7 @@ export class SeedStoryService {
 
   async wipeCrmData(): Promise<void> {
     await this.prisma.activity.deleteMany();
+    await this.prisma.opportunityContact.deleteMany();
     await this.prisma.opportunity.deleteMany();
     await this.prisma.contact.deleteMany();
     await this.prisma.lead.deleteMany();
@@ -113,6 +115,7 @@ export class SeedStoryService {
         type,
         payload: payload as object,
         createdAt,
+        updatedAt: createdAt,
       },
     });
   }
@@ -125,12 +128,6 @@ export class SeedStoryService {
     const admin = await this.getAdminUser();
     const user = admin as any;
 
-    let accountsCreated = 0;
-    let contactsCreated = 0;
-    let opportunitiesCreated = 0;
-    let activitiesCreated = 0;
-    let attachmentsCreated = 0;
-
     if (reset) {
       await this.wipeCrmData();
       await this.wipeUploads();
@@ -138,6 +135,13 @@ export class SeedStoryService {
 
     const now = new Date();
     const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+
+    let accountsCreated = 0;
+    let contactsCreated = 0;
+    let opportunitiesCreated = 0;
+    let leadsCreated = 0;
+    let activitiesCreated = 0;
+    let attachmentsCreated = 0;
 
     // --- Apex Data Centers ---
     let apexAccount = await this.prisma.account.findFirst({
@@ -172,7 +176,8 @@ export class SeedStoryService {
     ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
 
     await this.seedApexActivities(apexId, apexContacts, apexOpps, reset, (n) => { activitiesCreated += n; });
-    const apexAttachmentCount = await this.seedApexAttachments(apexId, user, reset);
+    await this.ensureDealTeams(apexOpps, apexContacts, ['Champion', 'Economic Buyer', 'Technical Stakeholder', 'Other', 'Other', 'Other']);
+    const apexAttachmentCount = await this.seedApexAttachments(apexId, apexOpps, user, reset);
     attachmentsCreated += apexAttachmentCount;
 
     // --- Northwind Telecom ---
@@ -198,13 +203,14 @@ export class SeedStoryService {
       { firstName: 'Pat', lastName: 'Morgan', email: 'pat.morgan@northwindtelecom.com', title: 'Procurement' },
     ], reset, (n) => { contactsCreated += n; });
 
-    await this.ensureOpportunities(northwindId, [
+    const northwindOpps = await this.ensureOpportunities(northwindId, [
       { name: 'Core Network Modernization', stage: 'proposal', amount: 650_000, closeDaysOut: 30, lastActivityAtDaysAgo: 6, lastStageChangedAtDaysAgo: 13 }, // at-risk
       { name: 'Long-haul Fiber Connectivity', stage: 'qualification', amount: 300_000, closeDaysOut: 75, lastActivityAtDaysAgo: 10, lastStageChangedAtDaysAgo: 16 }, // stale
     ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
 
-    await this.seedNorthwindActivities(northwindId, northwindContacts, reset, (n) => { activitiesCreated += n; });
-    const northwindAttachmentCount = await this.seedNorthwindAttachments(northwindId, user, reset);
+    await this.seedNorthwindActivities(northwindId, northwindContacts, northwindOpps, reset, (n) => { activitiesCreated += n; });
+    await this.ensureDealTeams(northwindOpps, northwindContacts, ['Champion', 'Economic Buyer', 'Technical Stakeholder', 'Other']);
+    const northwindAttachmentCount = await this.seedNorthwindAttachments(northwindId, northwindOpps, user, reset);
     attachmentsCreated += northwindAttachmentCount;
 
     // --- Globex Manufacturing ---
@@ -229,13 +235,18 @@ export class SeedStoryService {
       { firstName: 'Robert', lastName: 'Lewis', email: 'robert.lewis@globexmfg.com', title: 'Finance Analyst' },
     ], reset, (n) => { contactsCreated += n; });
 
-    await this.ensureOpportunities(globexId, [
+    const globexOpps = await this.ensureOpportunities(globexId, [
       { name: 'ERP Integration Modernization', stage: 'qualification', amount: 250_000, closeDaysOut: 90, lastActivityAtDaysAgo: 20, lastStageChangedAtDaysAgo: 25 }, // stale
     ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
 
-    await this.seedGlobexActivities(globexId, globexContacts, reset, (n) => { activitiesCreated += n; });
-    const globexAttachmentCount = await this.seedGlobexAttachments(globexId, user, reset);
+    await this.seedGlobexActivities(globexId, globexContacts, globexOpps, reset, (n) => { activitiesCreated += n; });
+    await this.ensureDealTeams(globexOpps, globexContacts, ['Champion', 'Technical Stakeholder', 'Other']);
+    const globexAttachmentCount = await this.seedGlobexAttachments(globexId, globexOpps, user, reset);
     attachmentsCreated += globexAttachmentCount;
+
+    // --- Story leads (unconverted) ---
+    const storyLeadsCreated = await this.ensureStoryLeads(reset);
+    leadsCreated += storyLeadsCreated;
 
     // --- Filler ---
     if (includeFiller && fillerCount > 0) {
@@ -259,10 +270,68 @@ export class SeedStoryService {
       accountsCreated,
       contactsCreated,
       opportunitiesCreated,
+      leadsCreated,
       activitiesCreated,
       attachmentsCreated,
       storyAccountIds: { apexId, northwindId, globexId },
     };
+  }
+
+  /** Create story leads (unconverted). When reset, replace any existing with same email; otherwise only add missing. */
+  private async ensureStoryLeads(reset: boolean): Promise<number> {
+    const storyLeads: Array<{ name: string; email: string; company: string | null; status: string; source: string | null }> = [
+      { name: 'Jordan Reeves', email: 'jordan.reeves@metrocolocation.com', company: 'Metro Colocation', status: 'new', source: 'website' },
+      { name: 'Sam Rivera', email: 'sam.rivera@metrocolocation.com', company: 'Metro Colocation', status: 'contacted', source: 'website' },
+      { name: 'Alex Foster', email: 'alex.foster@fiberfirst.net', company: 'FiberFirst Networks', status: 'qualified', source: 'referral' },
+      { name: 'Casey Kim', email: 'casey.kim@fiberfirst.net', company: 'FiberFirst Networks', status: 'working', source: 'referral' },
+      { name: 'Morgan Tate', email: 'morgan.tate@industrialautomation.io', company: 'Industrial Automation Inc', status: 'new', source: 'trade show' },
+      { name: 'Riley Chen', email: 'riley.chen@standalone-prospect.com', company: null, status: 'new', source: 'inbound' },
+    ];
+    let created = 0;
+    for (const lead of storyLeads) {
+      const existing = await this.prisma.lead.findFirst({ where: { email: lead.email } });
+      if (existing) {
+        if (reset) {
+          await this.prisma.lead.delete({ where: { id: existing.id } });
+        } else {
+          continue;
+        }
+      }
+      await this.prisma.lead.create({
+        data: {
+          name: lead.name,
+          email: lead.email,
+          company: lead.company,
+          status: lead.status,
+          source: lead.source,
+        },
+      });
+      created++;
+    }
+    return created;
+  }
+
+  /** Assign contacts to opportunities as deal team with roles. rolesByIndex[i] is the role for contacts[i]. */
+  private async ensureDealTeams(
+    opportunities: Array<{ id: string }>,
+    contacts: Array<{ id: string }>,
+    rolesByIndex: string[],
+  ): Promise<void> {
+    const maxContacts = Math.min(contacts.length, rolesByIndex.length);
+    if (maxContacts === 0) return;
+    const data: Array<{ opportunityId: string; contactId: string; role: string }> = [];
+    for (const opp of opportunities) {
+      for (let i = 0; i < maxContacts; i++) {
+        data.push({
+          opportunityId: opp.id,
+          contactId: contacts[i].id,
+          role: rolesByIndex[i],
+        });
+      }
+    }
+    if (data.length) {
+      await this.prisma.opportunityContact.createMany({ data, skipDuplicates: true });
+    }
   }
 
   private async ensureContacts(
@@ -362,7 +431,6 @@ export class SeedStoryService {
       if (count >= 40) return;
     }
 
-    const oppId = opps[0]?.id ?? accountId;
     const daysAgo = (d: number) => {
       const dte = new Date();
       dte.setDate(dte.getDate() - d);
@@ -397,25 +465,37 @@ export class SeedStoryService {
       const createdAt = daysAgo(a.daysAgo);
       await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt);
       if (opps.length && a.daysAgo <= 60) {
-        await this.createActivityWithDate('opportunity', oppId, a.type, a.payload, createdAt);
+        for (const opp of opps) {
+          await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt);
+        }
       }
     }
-    onCreated(activities.length * 2);
+    onCreated(activities.length + (opps.length && activities.filter((a) => a.daysAgo <= 60).length * opps.length));
   }
 
-  private async seedApexAttachments(accountId: string, user: any, reset: boolean): Promise<number> {
+  private async seedApexAttachments(
+    accountId: string,
+    opps: Array<{ id: string }>,
+    user: any,
+    reset: boolean,
+  ): Promise<number> {
     const files = [
       { name: 'Renewal Pricing Model Q3.txt', content: 'Apex Data Centers - Renewal Pricing Model Q3\n\nTier 1: Colocation base - $X per kW\nTier 2: Edge expansion - $Y per cabinet\nMulti-year discount: 12% for 3-year, 15% for 5-year.\n\nValid through end of quarter.' },
       { name: 'Apex Infrastructure Assessment.md', content: '# Apex Infrastructure Assessment\n\n## Current state\n- 3 data centers in primary region\n- Edge expansion planned for Phase 1\n\n## Recommendations\n- DR add-on to align with compliance requirements\n- Network modernization in DC2.' },
       { name: 'Competitor Comparison.txt', content: 'Competitor comparison for Apex renewal.\n\nUs: Strong on edge, competitive pricing.\nEquinix: Strong brand, higher cost.\nDigital Realty: Good footprint, longer lead times.\n\nRecommend positioning on edge and support.' },
       { name: 'Edge Expansion Proposal Draft.txt', content: 'Edge Expansion Phase 1 - Proposal Draft\n\nScope: 50 cabinets across 2 sites\nTimeline: 6 months from signature\nPricing: As per Renewal Pricing Model Q3\n\nNext: Site survey and final SOW.' },
     ];
-    return this.ensureAttachments(accountId, 'account', files, user, reset);
+    let count = await this.ensureAttachments(accountId, 'account', files, user, reset);
+    for (const opp of opps) {
+      count += await this.ensureAttachments(opp.id, 'opportunity', files, user, reset);
+    }
+    return count;
   }
 
   private async seedNorthwindActivities(
     accountId: string,
     _contacts: Array<{ id: string }>,
+    opps: Array<{ id: string; name: string }>,
     reset: boolean,
     onCreated: (n: number) => void,
   ): Promise<void> {
@@ -449,23 +529,37 @@ export class SeedStoryService {
     ];
 
     for (const a of activities) {
-      await this.createActivityWithDate('account', accountId, a.type, a.payload, daysAgo(a.daysAgo));
+      const createdAt = daysAgo(a.daysAgo);
+      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt);
+      for (const opp of opps) {
+        await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt);
+      }
     }
-    onCreated(activities.length);
+    onCreated(activities.length * (1 + opps.length));
   }
 
-  private async seedNorthwindAttachments(accountId: string, user: any, reset: boolean): Promise<number> {
+  private async seedNorthwindAttachments(
+    accountId: string,
+    opps: Array<{ id: string }>,
+    user: any,
+    reset: boolean,
+  ): Promise<number> {
     const files = [
       { name: 'Northwind Requirements Doc.txt', content: 'Northwind Telecom - Core Network Modernization\n\nRequirements:\n- 100G backbone upgrade\n- Redundant paths\n- NOC integration\n\nTimeline: 6 months preferred.' },
       { name: 'Implementation Timeline Draft.md', content: '# Implementation Timeline\n\nPhase 1: Design (4 weeks)\nPhase 2: Build (12 weeks)\nPhase 3: Cutover (2 weeks)\n\nGo-live target: Q2.' },
       { name: 'Fiber Topology Overview.txt', content: 'Fiber topology for Northwind long-haul.\n\nSites: 5 primary, 3 edge\nCurrent: 10G, Target: 100G\n\nMap and specs attached in follow-up.' },
     ];
-    return this.ensureAttachments(accountId, 'account', files, user, reset);
+    let count = await this.ensureAttachments(accountId, 'account', files, user, reset);
+    for (const opp of opps) {
+      count += await this.ensureAttachments(opp.id, 'opportunity', files, user, reset);
+    }
+    return count;
   }
 
   private async seedGlobexActivities(
     accountId: string,
     _contacts: Array<{ id: string }>,
+    opps: Array<{ id: string; name: string }>,
     reset: boolean,
     onCreated: (n: number) => void,
   ): Promise<void> {
@@ -499,17 +593,30 @@ export class SeedStoryService {
     ];
 
     for (const a of activities) {
-      await this.createActivityWithDate('account', accountId, a.type, a.payload, daysAgo(a.daysAgo));
+      const createdAt = daysAgo(a.daysAgo);
+      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt);
+      for (const opp of opps) {
+        await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt);
+      }
     }
-    onCreated(activities.length);
+    onCreated(activities.length * (1 + opps.length));
   }
 
-  private async seedGlobexAttachments(accountId: string, user: any, reset: boolean): Promise<number> {
+  private async seedGlobexAttachments(
+    accountId: string,
+    opps: Array<{ id: string }>,
+    user: any,
+    reset: boolean,
+  ): Promise<number> {
     const files = [
       { name: 'ERP Integration Scope.txt', content: 'Globex Manufacturing - ERP Integration Scope\n\nObjectives:\n- Replace legacy ERP modules\n- Integrate with shop floor systems\n- Reporting and analytics\n\nEstimated timeline: 9 months.' },
       { name: 'Manufacturing Workflow Notes.md', content: '# Manufacturing Workflow Notes\n\nCurrent: Manual handoffs between ERP and MES.\nTarget: Real-time sync, single source of truth.\n\nKey stakeholders: Frank (IT), Susan (Ops).' },
     ];
-    return this.ensureAttachments(accountId, 'account', files, user, reset);
+    let count = await this.ensureAttachments(accountId, 'account', files, user, reset);
+    for (const opp of opps) {
+      count += await this.ensureAttachments(opp.id, 'opportunity', files, user, reset);
+    }
+    return count;
   }
 
   private async ensureAttachments(
@@ -567,8 +674,9 @@ export class SeedStoryService {
       accountsCreated++;
 
       const numContacts = 1 + Math.floor(rand() * 3);
+      const fillerContactIds: Array<{ id: string }> = [];
       for (let c = 0; c < numContacts; c++) {
-        await this.prisma.contact.create({
+        const contact = await this.prisma.contact.create({
           data: {
             accountId: account.id,
             firstName: `First${c}`,
@@ -576,6 +684,7 @@ export class SeedStoryService {
             email: `contact${c}@${name.toLowerCase().replace(/\s/g, '')}.com`,
           },
         });
+        fillerContactIds.push({ id: contact.id });
         contactsCreated++;
       }
 
@@ -609,7 +718,7 @@ export class SeedStoryService {
         }
         const lastActivityAt = lastActivityAtDaysAgo > 0 ? addDays(today, -lastActivityAtDaysAgo) : undefined;
         const lastStageChangedAt = lastStageChangedAtDaysAgo > 0 ? addDays(today, -lastStageChangedAtDaysAgo) : undefined;
-        await this.prisma.opportunity.create({
+        const opp = await this.prisma.opportunity.create({
           data: {
             accountId: account.id,
             name: `Opportunity ${o + 1}`,
@@ -622,6 +731,16 @@ export class SeedStoryService {
           },
         });
         opportunitiesCreated++;
+        const fillerRoles = ['Champion', 'Economic Buyer', 'Technical Stakeholder', 'Other'];
+        const numDealTeam = Math.min(1 + Math.floor(rand() * Math.min(3, fillerContactIds.length)), fillerContactIds.length);
+        await this.ensureDealTeams(
+          [{ id: opp.id }],
+          fillerContactIds.slice(0, numDealTeam),
+          fillerRoles.slice(0, numDealTeam),
+        );
+        const oppFile = fakeFile(`Opportunity ${o + 1} - Notes.txt`, `Notes for Opportunity ${o + 1} at ${name}.\n\nStage: ${stageSpec.stage}. Some details.`);
+        await this.attachmentsService.create('opportunity', opp.id, oppFile, user);
+        attachmentsCreated++;
       }
 
       const numActivities = 5 + Math.floor(rand() * 6);

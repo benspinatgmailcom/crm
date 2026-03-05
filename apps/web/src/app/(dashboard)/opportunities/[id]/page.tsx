@@ -3,15 +3,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, Check, X, Pencil, Eye, Copy, Send } from "lucide-react";
+import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, Check, X, Pencil, Eye, Copy, Send, FileText, RefreshCw, Loader2, Users, UserPlus, ChevronRight } from "lucide-react";
 import { ActionIconButton } from "@/components/ui/action-icon-button";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
 import { canWrite, isAdmin } from "@/lib/roles";
 import { Modal } from "@/components/ui/modal";
+import { MarkdownView } from "@/components/ui/markdown-view";
 import { ActivityTimeline } from "@/components/activity/activity-timeline";
 import { EntityAttachments } from "@/components/attachments/entity-attachments";
-import { opportunitySchema, type OpportunityFormData } from "@/lib/validation";
+import { opportunitySchema, contactSchema, type OpportunityFormData, type ContactFormData } from "@/lib/validation";
 
 interface HealthSignal {
   code: string;
@@ -26,7 +27,6 @@ interface Opportunity {
   name: string;
   amount: { toString(): string } | null;
   stage: string | null;
-  probability: number | null;
   closeDate: string | null;
   sourceLeadId?: string | null;
   ownerId?: string;
@@ -100,7 +100,54 @@ interface FollowupsResponse {
   openTasks: OpenTask[];
 }
 
+interface DealBriefResponse {
+  opportunityId: string;
+  briefMarkdown: string;
+  activityId: string;
+  generatedAt: string;
+}
+
+const DEAL_TEAM_ROLES = ["Champion", "Economic Buyer", "Technical Stakeholder", "Other"] as const;
+
+interface DealTeamMember {
+  contactId: string;
+  role: string;
+  contact: { id: string; firstName: string; lastName: string; email: string; phone?: string | null };
+}
+
 const STAGE_OPTIONS = ["prospecting", "discovery", "qualification", "proposal", "negotiation", "closed-won", "closed-lost"];
+
+/** Sales process stages in pipeline order (matches API pipeline). */
+const SALES_PROCESS_STAGES = [
+  "prospecting",
+  "qualification",
+  "discovery",
+  "proposal",
+  "negotiation",
+  "closed-won",
+  "closed-lost",
+] as const;
+
+function stageLabel(stage: string): string {
+  const labels: Record<string, string> = {
+    prospecting: "Prospecting",
+    qualification: "Qualification",
+    discovery: "Discovery",
+    proposal: "Proposal",
+    negotiation: "Negotiation",
+    "closed-won": "Closed Won",
+    "closed-lost": "Closed Lost",
+  };
+  return labels[stage] ?? stage;
+}
+
+const CLOSED_LOST_REASONS = [
+  "Lost to competitor",
+  "Budget / No budget",
+  "No decision / Stalled",
+  "Timing not right",
+  "Other",
+] as const;
 
 function formatAmount(amount: { toString(): string } | null): string {
   if (amount == null) return "—";
@@ -157,6 +204,31 @@ export default function OpportunityDetailPage() {
   const [users, setUsers] = useState<{ id: string; email: string; role: string }[]>([]);
   const [ownerSaving, setOwnerSaving] = useState(false);
 
+  const [dealBrief, setDealBrief] = useState<DealBriefResponse | null>(null);
+  const [dealBriefLoading, setDealBriefLoading] = useState(false);
+  const [dealBriefGenerating, setDealBriefGenerating] = useState(false);
+  const [dealBriefError, setDealBriefError] = useState<string | null>(null);
+
+  const [dealTeam, setDealTeam] = useState<DealTeamMember[]>([]);
+  const [dealTeamLoading, setDealTeamLoading] = useState(false);
+  const [dealTeamError, setDealTeamError] = useState<string | null>(null);
+  const [dealTeamActionId, setDealTeamActionId] = useState<string | null>(null);
+  const [addDealTeamContactId, setAddDealTeamContactId] = useState("");
+  const [addDealTeamRole, setAddDealTeamRole] = useState<string>(DEAL_TEAM_ROLES[0]);
+
+  const [newContactModalOpen, setNewContactModalOpen] = useState(false);
+  const [newContactFormData, setNewContactFormData] = useState<ContactFormData>({ accountId: "", firstName: "", lastName: "", email: "", phone: "" });
+  const [newContactFormErrors, setNewContactFormErrors] = useState<Record<string, string>>({});
+  const [newContactSubmitting, setNewContactSubmitting] = useState(false);
+  const [newContactDealTeamRole, setNewContactDealTeamRole] = useState<string>(DEAL_TEAM_ROLES[0]);
+
+  const [stageUpdating, setStageUpdating] = useState(false);
+  const [closedLostModalOpen, setClosedLostModalOpen] = useState(false);
+  const [closedLostReason, setClosedLostReason] = useState("");
+  const [closedLostNotes, setClosedLostNotes] = useState("");
+  const [editLostReason, setEditLostReason] = useState("");
+  const [editLostNotes, setEditLostNotes] = useState("");
+
   const fetchOpportunity = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -184,12 +256,125 @@ export default function OpportunityDetailPage() {
 
   const fetchContacts = useCallback(async (accountId: string) => {
     try {
-      const res = await apiFetch<{ data: Contact[] }>(`/contacts?accountId=${accountId}&pageSize=5`);
+      const res = await apiFetch<{ data: Contact[] }>(`/contacts?accountId=${accountId}&pageSize=50`);
       setContacts(res.data ?? []);
     } catch {
       setContacts([]);
     }
   }, []);
+
+  const fetchDealTeam = useCallback(async (opportunityId: string) => {
+    setDealTeamLoading(true);
+    setDealTeamError(null);
+    try {
+      const list = await apiFetch<DealTeamMember[]>(`/opportunities/${opportunityId}/deal-team`);
+      setDealTeam(Array.isArray(list) ? list : []);
+    } catch {
+      setDealTeam([]);
+    } finally {
+      setDealTeamLoading(false);
+    }
+  }, []);
+
+  const addDealTeamMember = useCallback(async (contactId: string, role: string) => {
+    if (!id) return;
+    setDealTeamActionId(`add-${contactId}`);
+    setDealTeamError(null);
+    try {
+      await apiFetch(`/opportunities/${id}/deal-team`, {
+        method: "POST",
+        body: JSON.stringify({ contactId, role }),
+      });
+      await fetchDealTeam(id);
+      setAddDealTeamContactId("");
+      setAddDealTeamRole(DEAL_TEAM_ROLES[0]);
+    } catch (err: unknown) {
+      const e = err as { body?: { message?: string } };
+      setDealTeamError(e.body?.message ?? "Failed to add to deal team.");
+    } finally {
+      setDealTeamActionId(null);
+    }
+  }, [id, fetchDealTeam]);
+
+  const updateDealTeamRole = useCallback(async (contactId: string, role: string) => {
+    if (!id) return;
+    setDealTeamActionId(`update-${contactId}`);
+    setDealTeamError(null);
+    try {
+      await apiFetch(`/opportunities/${id}/deal-team/${contactId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      });
+      await fetchDealTeam(id);
+    } catch (err: unknown) {
+      const e = err as { body?: { message?: string } };
+      setDealTeamError(e.body?.message ?? "Failed to update role.");
+    } finally {
+      setDealTeamActionId(null);
+    }
+  }, [id, fetchDealTeam]);
+
+  const removeDealTeamMember = useCallback(async (contactId: string) => {
+    if (!id) return;
+    setDealTeamActionId(`remove-${contactId}`);
+    setDealTeamError(null);
+    try {
+      await apiFetch(`/opportunities/${id}/deal-team/${contactId}`, { method: "DELETE" });
+      await fetchDealTeam(id);
+    } catch (err: unknown) {
+      const e = err as { body?: { message?: string } };
+      setDealTeamError(e.body?.message ?? "Failed to remove from deal team.");
+    } finally {
+      setDealTeamActionId(null);
+    }
+  }, [id, fetchDealTeam]);
+
+  const openNewContactModal = useCallback(() => {
+    if (!opportunity?.accountId) return;
+    setNewContactFormData({ accountId: opportunity.accountId, firstName: "", lastName: "", email: "", phone: "" });
+    setNewContactFormErrors({});
+    setNewContactDealTeamRole(DEAL_TEAM_ROLES[0]);
+    setNewContactModalOpen(true);
+  }, [opportunity?.accountId]);
+
+  const handleNewContactSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!id || !opportunity?.accountId) return;
+      setNewContactFormErrors({});
+      setNewContactSubmitting(true);
+      const parsed = contactSchema.safeParse({ ...newContactFormData, phone: newContactFormData.phone || undefined });
+      if (!parsed.success) {
+        const errs: Record<string, string> = {};
+        parsed.error.errors.forEach((err) => {
+          const p = err.path[0] as string;
+          if (p && !errs[p]) errs[p] = err.message;
+        });
+        setNewContactFormErrors(errs);
+        setNewContactSubmitting(false);
+        return;
+      }
+      try {
+        const created = await apiFetch<{ id: string }>("/contacts", {
+          method: "POST",
+          body: JSON.stringify(parsed.data),
+        });
+        await apiFetch(`/opportunities/${id}/deal-team`, {
+          method: "POST",
+          body: JSON.stringify({ contactId: created.id, role: newContactDealTeamRole }),
+        });
+        setNewContactModalOpen(false);
+        await fetchDealTeam(id);
+        await fetchContacts(opportunity.accountId);
+      } catch (err: unknown) {
+        const e = err as { body?: { message?: string } };
+        setNewContactFormErrors({ _: e.body?.message ?? "Failed to create contact or add to deal team." });
+      } finally {
+        setNewContactSubmitting(false);
+      }
+    },
+    [id, opportunity?.accountId, newContactFormData, newContactDealTeamRole, fetchDealTeam, fetchContacts]
+  );
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -212,6 +397,39 @@ export default function OpportunityDetailPage() {
       setFollowupsLoading(false);
     }
   }, []);
+
+  const fetchDealBrief = useCallback(async (opportunityId: string, forceRefresh: boolean) => {
+    setDealBriefError(null);
+    try {
+      const res = await apiFetch<DealBriefResponse>(`/ai/deal-brief/${opportunityId}`, {
+        method: "POST",
+        body: JSON.stringify({ forceRefresh, lookbackDays: 30 }),
+      });
+      setDealBrief(res);
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string; body?: { message?: string } };
+      if (e.status === 403) {
+        setDealBriefError("You don't have permission to generate deal briefs.");
+      } else {
+        setDealBriefError(e.body?.message ?? e.message ?? "Failed to load or generate deal brief.");
+      }
+      setDealBrief(null);
+    }
+  }, []);
+
+  const loadDealBrief = useCallback(async () => {
+    if (!id || !canEdit) return;
+    setDealBriefLoading(true);
+    await fetchDealBrief(id, false);
+    setDealBriefLoading(false);
+  }, [id, canEdit, fetchDealBrief]);
+
+  const generateOrRefreshDealBrief = useCallback(async () => {
+    if (!id || !canEdit) return;
+    setDealBriefGenerating(true);
+    await fetchDealBrief(id, true);
+    setDealBriefGenerating(false);
+  }, [id, canEdit, fetchDealBrief]);
 
   const createTaskFromSuggestion = async (suggestionId: string) => {
     setFollowupActionId(suggestionId);
@@ -324,6 +542,14 @@ export default function OpportunityDetailPage() {
   }, [id, fetchFollowups]);
 
   useEffect(() => {
+    if (id && canEdit) loadDealBrief();
+  }, [id, canEdit, loadDealBrief]);
+
+  useEffect(() => {
+    if (id) fetchDealTeam(id);
+  }, [id, fetchDealTeam]);
+
+  useEffect(() => {
     if (opportunity?.accountId) {
       fetchAccount(opportunity.accountId);
       fetchContacts(opportunity.accountId);
@@ -342,6 +568,33 @@ export default function OpportunityDetailPage() {
         .catch(() => setUsers([]));
     }
   }, [opportunity?.id, opportunity?.ownerId, user?.id, user?.role, canEdit]);
+
+  const setStage = useCallback(
+    async (newStage: string, lostReason?: string, lostNotes?: string) => {
+      if (!id || !opportunity || newStage === (opportunity.stage ?? "")) return;
+      if (newStage === "closed-lost" && !(lostReason ?? "").trim()) return;
+      setStageUpdating(true);
+      try {
+        const body: { stage: string; lostReason?: string; lostNotes?: string } = { stage: newStage };
+        if (newStage === "closed-lost") {
+          if (lostReason?.trim()) body.lostReason = lostReason.trim();
+          const noteVal = (lostNotes ?? "").trim();
+          if (noteVal) body.lostNotes = noteVal;
+        }
+        await apiFetch(`/opportunities/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        await fetchOpportunity();
+        setTimelineRefreshKey((k) => k + 1);
+      } catch {
+        // leave stage unchanged
+      } finally {
+        setStageUpdating(false);
+      }
+    },
+    [id, opportunity, fetchOpportunity]
+  );
 
   const updateOwner = async (newOwnerId: string) => {
     if (!id || newOwnerId === opportunity?.ownerId) return;
@@ -364,11 +617,12 @@ export default function OpportunityDetailPage() {
       name: opportunity.name,
       amount: opportunity.amount != null ? Number(opportunity.amount.toString()) : undefined,
       stage: opportunity.stage || "prospecting",
-      probability: opportunity.probability ?? undefined,
       closeDate: opportunity.closeDate ? opportunity.closeDate.slice(0, 10) : "",
       winProbability: opportunity.winProbability ?? undefined,
       forecastCategory: (opportunity.forecastCategory as "pipeline" | "best_case" | "commit" | "closed") ?? undefined,
     });
+    setEditLostReason("");
+    setEditLostNotes("");
     setFormErrors({});
     setSubmitError(null);
     setEditModalOpen(true);
@@ -379,12 +633,20 @@ export default function OpportunityDetailPage() {
     if (!opportunity) return;
     setFormErrors({});
     setSubmitError(null);
+    const stage = formData.stage || undefined;
+    if (stage === "closed-lost" && !editLostReason.trim()) {
+      setFormErrors({ lostReason: "A reason is required when closing as lost." });
+      return;
+    }
+    if (stage === "closed-lost" && editLostReason === "Other" && !editLostNotes.trim()) {
+      setFormErrors({ lostNotes: "A note is required when the reason is Other." });
+      return;
+    }
     const payload = {
       accountId: formData.accountId,
       name: formData.name,
       amount: formData.amount,
-      stage: formData.stage || undefined,
-      probability: formData.probability,
+      stage,
       closeDate: formData.closeDate || undefined,
       winProbability: formData.winProbability,
       forecastCategory: formData.forecastCategory,
@@ -402,17 +664,19 @@ export default function OpportunityDetailPage() {
 
     setSubmitting(true);
     try {
+      const body: Record<string, unknown> = {
+        name: parsed.data.name,
+        amount: parsed.data.amount,
+        stage: parsed.data.stage,
+        closeDate: parsed.data.closeDate,
+        winProbability: parsed.data.winProbability,
+        forecastCategory: parsed.data.forecastCategory,
+      };
+      if (stage === "closed-lost" && editLostReason.trim()) body.lostReason = editLostReason.trim();
+      if (stage === "closed-lost" && editLostNotes.trim()) body.lostNotes = editLostNotes.trim();
       await apiFetch(`/opportunities/${opportunity.id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          name: parsed.data.name,
-          amount: parsed.data.amount,
-          stage: parsed.data.stage,
-          probability: parsed.data.probability,
-          closeDate: parsed.data.closeDate,
-          winProbability: parsed.data.winProbability,
-          forecastCategory: parsed.data.forecastCategory,
-        }),
+        body: JSON.stringify(body),
       });
       setEditModalOpen(false);
       fetchOpportunity();
@@ -478,6 +742,142 @@ export default function OpportunityDetailPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-gray-900">Sales process</h2>
+            <div className="flex flex-wrap items-center gap-0.5 text-sm">
+              {SALES_PROCESS_STAGES.map((stage, index) => {
+                const isCurrent = (opportunity.stage ?? "prospecting") === stage;
+                const isClickable = canEdit && !stageUpdating;
+                const labelEl = (
+                  <span
+                    className={`inline-flex items-center rounded px-2.5 py-1 font-medium ${
+                      isCurrent
+                        ? "bg-accent-1 text-white"
+                        : isClickable
+                          ? "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          : "bg-gray-50 text-gray-500"
+                    }`}
+                  >
+                    {stageLabel(stage)}
+                  </span>
+                );
+                return (
+                  <span key={stage} className="inline-flex items-center">
+                    {isClickable ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (stage === "closed-lost") setClosedLostModalOpen(true);
+                          else setStage(stage);
+                        }}
+                        disabled={stageUpdating}
+                        className="disabled:opacity-50"
+                      >
+                        {labelEl}
+                      </button>
+                    ) : (
+                      labelEl
+                    )}
+                    {index < SALES_PROCESS_STAGES.length - 1 && (
+                      <ChevronRight className="mx-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 text-sm font-semibold text-gray-900">Opportunity details</h2>
+            <div className="grid grid-cols-1 gap-6 text-sm sm:grid-cols-2">
+              <dl className="space-y-2">
+                <div>
+                  <dt className="text-gray-500">Name</dt>
+                  <dd className="font-medium text-gray-900">{opportunity.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Account</dt>
+                  <dd className="text-gray-900">
+                    {account ? (
+                      <Link href={`/accounts/${opportunity.accountId}`} className="text-accent-1 hover:underline">
+                        {account.name}
+                      </Link>
+                    ) : (
+                      <Link href={`/accounts/${opportunity.accountId}`} className="text-accent-1 hover:underline">
+                        View account
+                      </Link>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Owner</dt>
+                  <dd className="text-gray-900">
+                    {canEdit && (isAdmin(user?.role) || opportunity.ownerId === user?.id) && users.length > 0 ? (
+                      <select
+                        value={opportunity.ownerId ?? ""}
+                        onChange={(e) => updateOwner(e.target.value)}
+                        disabled={ownerSaving}
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 disabled:opacity-50"
+                      >
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.email} {u.role !== "USER" ? `(${u.role})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span>{opportunity.owner?.email ?? opportunity.ownerId ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Stage</dt>
+                  <dd className="text-gray-900">{opportunity.stage ?? "—"}</dd>
+                </div>
+              </dl>
+              <dl className="space-y-2">
+                <div>
+                  <dt className="text-gray-500">Amount</dt>
+                  <dd className="text-gray-900">{formatAmount(opportunity.amount)}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Close Date</dt>
+                  <dd className="text-gray-900">
+                    {opportunity.closeDate ? new Date(opportunity.closeDate).toLocaleDateString() : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Win probability</dt>
+                  <dd className="text-gray-900">
+                    {opportunity.winProbability != null ? `${opportunity.winProbability}%` : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Forecast category</dt>
+                  <dd className="text-gray-900">{forecastCategoryLabel(opportunity.forecastCategory)}</dd>
+                </div>
+                <div>
+                  <dt className="text-gray-500">Expected revenue</dt>
+                  <dd className="text-gray-900">{formatAmount(opportunity.expectedRevenue ?? null)}</dd>
+                </div>
+              </dl>
+            </div>
+            {opportunity.sourceLeadId && (
+              <dl className="mt-3 border-t border-gray-200 pt-3 text-sm">
+                <div>
+                  <dt className="text-gray-500">Created from Lead</dt>
+                  <dd className="mt-0.5 text-gray-900">
+                    <ActionIconButton
+                      icon={Eye}
+                      label="View lead"
+                      href={`/leads/${opportunity.sourceLeadId}`}
+                    />
+                  </dd>
+                </div>
+              </dl>
+            )}
+          </div>
+
           {(opportunity.healthScore != null || opportunity.daysSinceLastTouch != null || opportunity.daysInStage != null) && (
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
               <h2 className="mb-3 text-sm font-semibold text-gray-900">Deal health & aging</h2>
@@ -576,6 +976,82 @@ export default function OpportunityDetailPage() {
               </div>
             </div>
           )}
+
+          <div id="deal-brief" className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm scroll-mt-4">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <FileText className="h-4 w-4" />
+              Deal Brief
+            </h2>
+            {dealBriefError && (
+              <div className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{dealBriefError}</div>
+            )}
+            {dealBriefLoading && !dealBrief ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading deal brief…
+              </div>
+            ) : dealBrief ? (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={generateOrRefreshDealBrief}
+                      disabled={dealBriefGenerating}
+                      className="inline-flex items-center gap-1.5 rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {dealBriefGenerating ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      )}
+                      {dealBriefGenerating ? "Refreshing…" : "Refresh"}
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    Last generated: {new Date(dealBrief.generatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                  </span>
+                  {(() => {
+                    const match = dealBrief.briefMarkdown.match(/AI Confidence:\s*(Low|Medium|High)/i);
+                    return match ? (
+                      <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                        AI Confidence: {match[1]}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+                <div className="rounded border border-gray-100 bg-gray-50/50 p-4 text-gray-900">
+                  <MarkdownView
+                    content={dealBrief.briefMarkdown.replace(/\n?AI Confidence:\s*(Low|Medium|High)\s*$/i, "").trim()}
+                  />
+                </div>
+              </div>
+            ) : canEdit ? (
+              <div>
+                <p className="mb-3 text-sm text-gray-500">Generate an AI-powered deal brief from this opportunity and recent activity.</p>
+                <button
+                  type="button"
+                  onClick={generateOrRefreshDealBrief}
+                  disabled={dealBriefGenerating}
+                  className="inline-flex items-center gap-2 rounded bg-accent-1 px-3 py-2 text-sm font-medium text-white hover:brightness-95 disabled:opacity-50"
+                >
+                  {dealBriefGenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating…
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4" />
+                      Generate Deal Brief
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No deal brief yet. You need edit access to generate one.</p>
+            )}
+          </div>
 
           <div id="followups" className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm scroll-mt-4">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -803,138 +1279,125 @@ export default function OpportunityDetailPage() {
             )}
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Opportunity details</h2>
-            <dl className="space-y-2 text-sm">
-              <div>
-                <dt className="text-gray-500">Name</dt>
-                <dd className="font-medium text-gray-900">{opportunity.name}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Owner</dt>
-                <dd className="text-gray-900">
-                  {canEdit && (isAdmin(user?.role) || opportunity.ownerId === user?.id) && users.length > 0 ? (
-                    <select
-                      value={opportunity.ownerId ?? ""}
-                      onChange={(e) => updateOwner(e.target.value)}
-                      disabled={ownerSaving}
-                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 disabled:opacity-50"
-                    >
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.email} {u.role !== "USER" ? `(${u.role})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span>{opportunity.owner?.email ?? opportunity.ownerId ?? "—"}</span>
+          <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <Users className="h-4 w-4" />
+                Buying Team
+              </h2>
+            </div>
+            <div className="px-4 py-3">
+              {dealTeamError && (
+                <p className="mb-2 rounded bg-red-50 px-2 py-1.5 text-sm text-red-700">{dealTeamError}</p>
+              )}
+              {dealTeamLoading ? (
+                <p className="text-sm text-gray-500">Loading deal team…</p>
+              ) : dealTeam.length === 0 ? (
+                <p className="text-sm text-gray-500">No deal team assigned. Add contacts and set buyer roles below.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {dealTeam.map((m) => (
+                    <li key={m.contactId} className="flex flex-wrap items-center justify-between gap-2 rounded border border-gray-100 bg-gray-50/50 px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {m.contact.firstName} {m.contact.lastName}
+                        </p>
+                        <p className="text-xs text-gray-500">{m.contact.email}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {canEdit ? (
+                          <select
+                            value={m.role}
+                            onChange={(e) => updateDealTeamRole(m.contactId, e.target.value)}
+                            disabled={dealTeamActionId === `update-${m.contactId}`}
+                            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 disabled:opacity-50"
+                          >
+                            {DEAL_TEAM_ROLES.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700">{m.role}</span>
+                        )}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => removeDealTeamMember(m.contactId)}
+                            disabled={dealTeamActionId === `remove-${m.contactId}`}
+                            className="rounded border border-red-200 bg-white px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canEdit && account && (
+                <div className="mt-3 space-y-3 border-t border-gray-200 pt-3">
+                  {contacts.length > 0 && (
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="min-w-0 flex-1">
+                        <label className="block text-xs font-medium text-gray-500">Add to deal team</label>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <select
+                            value={addDealTeamContactId}
+                            onChange={(e) => setAddDealTeamContactId(e.target.value)}
+                            className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+                          >
+                            <option value="">Select contact…</option>
+                            {contacts
+                              .filter((c) => !dealTeam.some((m) => m.contactId === c.id))
+                              .map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.firstName} {c.lastName} ({c.email})
+                                </option>
+                              ))}
+                            {contacts.filter((c) => !dealTeam.some((m) => m.contactId === c.id)).length === 0 && (
+                              <option value="" disabled>All contacts already on team</option>
+                            )}
+                          </select>
+                          <select
+                            value={addDealTeamRole}
+                            onChange={(e) => setAddDealTeamRole(e.target.value)}
+                            className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900"
+                          >
+                            {DEAL_TEAM_ROLES.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (addDealTeamContactId && addDealTeamRole) {
+                                addDealTeamMember(addDealTeamContactId, addDealTeamRole);
+                              }
+                            }}
+                            disabled={dealTeamActionId !== null || !addDealTeamContactId}
+                            className="inline-flex items-center gap-1 rounded bg-accent-1 px-2.5 py-1.5 text-xs font-medium text-white hover:brightness-95 disabled:opacity-50"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Stage</dt>
-                <dd className="text-gray-900">{opportunity.stage ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Amount</dt>
-                <dd className="text-gray-900">{formatAmount(opportunity.amount)}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Probability</dt>
-                <dd className="text-gray-900">{opportunity.probability != null ? `${opportunity.probability}%` : "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Close Date</dt>
-                <dd className="text-gray-900">
-                  {opportunity.closeDate ? new Date(opportunity.closeDate).toLocaleDateString() : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Win probability</dt>
-                <dd className="text-gray-900">
-                  {opportunity.winProbability != null ? `${opportunity.winProbability}%` : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Forecast category</dt>
-                <dd className="text-gray-900">{forecastCategoryLabel(opportunity.forecastCategory)}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Expected revenue</dt>
-                <dd className="text-gray-900">{formatAmount(opportunity.expectedRevenue ?? null)}</dd>
-              </div>
-              {opportunity.sourceLeadId && (
-                <div>
-                  <dt className="text-gray-500">Created from Lead</dt>
-                  <dd className="text-gray-900">
-                    <ActionIconButton
-                      icon={Eye}
-                      label="View lead"
-                      href={`/leads/${opportunity.sourceLeadId}`}
-                    />
-                  </dd>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={openNewContactModal}
+                      className="inline-flex items-center gap-1 text-sm text-accent-1 hover:underline"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      Create new contact and add to deal team
+                    </button>
+                  </div>
                 </div>
               )}
-            </dl>
+            </div>
           </div>
-
-          {account && (
-            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Related Account</h2>
-              <Link
-                href={`/accounts/${account.id}`}
-                className="text-accent-1 hover:underline"
-              >
-                {account.name}
-              </Link>
-              {account.industry && (
-                <p className="mt-1 text-sm text-gray-500">{account.industry}</p>
-              )}
-              {account.website && (
-                <a
-                  href={account.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 block text-sm text-accent-1 hover:underline"
-                >
-                  {account.website}
-                </a>
-              )}
-              <ActionIconButton
-                icon={Eye}
-                label="View full account"
-                href={`/accounts/${account.id}`}
-                className="mt-2 inline-block"
-              />
-            </div>
-          )}
-
-          {account && (
-            <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-                <h2 className="text-sm font-semibold text-gray-900">Key Contacts</h2>
-                <ActionIconButton
-                  icon={Eye}
-                  label="View all on account"
-                  href={`/accounts/${account.id}`}
-                />
-              </div>
-              <div className="divide-y divide-gray-200">
-                {contacts.length === 0 ? (
-                  <p className="px-4 py-6 text-center text-sm text-gray-500">No contacts yet.</p>
-                ) : (
-                  contacts.map((c) => (
-                    <div key={c.id} className="px-4 py-3">
-                      <p className="text-sm font-medium text-gray-900">
-                        {c.firstName} {c.lastName}
-                      </p>
-                      <p className="text-sm text-gray-500">{c.email}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="space-y-6">
@@ -956,6 +1419,143 @@ export default function OpportunityDetailPage() {
           />
         </div>
       </div>
+
+      <Modal isOpen={newContactModalOpen} onClose={() => setNewContactModalOpen(false)} title="Create contact and add to deal team">
+        <form onSubmit={handleNewContactSubmit} className="space-y-4">
+          {newContactFormErrors._ && <p className="text-sm text-red-600">{newContactFormErrors._}</p>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">First name *</label>
+            <input
+              value={newContactFormData.firstName}
+              onChange={(e) => setNewContactFormData((d) => ({ ...d, firstName: e.target.value }))}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            {newContactFormErrors.firstName && <p className="mt-0.5 text-sm text-red-600">{newContactFormErrors.firstName}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Last name *</label>
+            <input
+              value={newContactFormData.lastName}
+              onChange={(e) => setNewContactFormData((d) => ({ ...d, lastName: e.target.value }))}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            {newContactFormErrors.lastName && <p className="mt-0.5 text-sm text-red-600">{newContactFormErrors.lastName}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Email *</label>
+            <input
+              type="email"
+              value={newContactFormData.email}
+              onChange={(e) => setNewContactFormData((d) => ({ ...d, email: e.target.value }))}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            {newContactFormErrors.email && <p className="mt-0.5 text-sm text-red-600">{newContactFormErrors.email}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Phone</label>
+            <input
+              value={newContactFormData.phone}
+              onChange={(e) => setNewContactFormData((d) => ({ ...d, phone: e.target.value }))}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Deal team role</label>
+            <select
+              value={newContactDealTeamRole}
+              onChange={(e) => setNewContactDealTeamRole(e.target.value)}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              {DEAL_TEAM_ROLES.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+            <p className="mt-0.5 text-xs text-gray-500">This contact will be added to the deal team with the selected role.</p>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={() => setNewContactModalOpen(false)} className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={newContactSubmitting} className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50">
+              {newContactSubmitting ? "Creating…" : "Create & add to deal team"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={closedLostModalOpen}
+        onClose={() => {
+          setClosedLostModalOpen(false);
+          setClosedLostReason("");
+          setClosedLostNotes("");
+        }}
+        title="Close as lost – reason required"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Please select a reason for closing this opportunity as lost.</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Reason *</label>
+            <select
+              value={closedLostReason}
+              onChange={(e) => setClosedLostReason(e.target.value)}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="">Select reason…</option>
+              {CLOSED_LOST_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Notes {closedLostReason === "Other" ? "*" : ""}
+            </label>
+            <textarea
+              value={closedLostNotes}
+              onChange={(e) => setClosedLostNotes(e.target.value)}
+              placeholder={closedLostReason === "Other" ? "Please provide details (required when reason is Other)…" : "Optional note for the timeline…"}
+              rows={3}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setClosedLostModalOpen(false);
+                setClosedLostReason("");
+                setClosedLostNotes("");
+              }}
+              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!closedLostReason.trim()) return;
+                if (closedLostReason === "Other" && !closedLostNotes.trim()) return;
+                const noteToSend = closedLostNotes.trim() || undefined;
+                await setStage("closed-lost", closedLostReason, noteToSend);
+                setClosedLostModalOpen(false);
+                setClosedLostReason("");
+                setClosedLostNotes("");
+              }}
+              disabled={
+                stageUpdating ||
+                !closedLostReason.trim() ||
+                (closedLostReason === "Other" && !closedLostNotes.trim())
+              }
+              className="rounded bg-accent-1 px-4 py-2 text-sm font-medium text-white hover:brightness-90 disabled:opacity-50"
+            >
+              {stageUpdating ? "Saving…" : "Confirm"}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={editModalOpen} onClose={() => setEditModalOpen(false)} title="Edit Opportunity">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -1005,22 +1605,6 @@ export default function OpportunityDetailPage() {
                 className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
               />
               {formErrors.amount && <p className="mt-0.5 text-sm text-red-600">{formErrors.amount}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Probability %</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={formData.probability ?? ""}
-                onChange={(e) =>
-                  setFormData((d) => ({
-                    ...d,
-                    probability: e.target.value ? Number(e.target.value) : undefined,
-                  }))
-                }
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Win probability %</label>
@@ -1086,6 +1670,47 @@ export default function OpportunityDetailPage() {
               />
             </div>
           </div>
+          {formData.stage === "closed-lost" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Lost reason *</label>
+                <select
+                  value={editLostReason}
+                  onChange={(e) => setEditLostReason(e.target.value)}
+                  className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="">Select reason…</option>
+                  {CLOSED_LOST_REASONS.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.lostReason && (
+                  <p className="mt-0.5 text-sm text-red-600">{formErrors.lostReason}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Notes {editLostReason === "Other" ? "*" : ""}
+                </label>
+                <textarea
+                  value={editLostNotes}
+                  onChange={(e) => setEditLostNotes(e.target.value)}
+                  placeholder={
+                    editLostReason === "Other"
+                      ? "Please provide details (required when reason is Other)…"
+                      : "Optional note for the timeline…"
+                  }
+                  rows={3}
+                  className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                />
+                {formErrors.lostNotes && (
+                  <p className="mt-0.5 text-sm text-red-600">{formErrors.lostNotes}</p>
+                )}
+              </div>
+            </>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"

@@ -20,6 +20,7 @@ const CONTENT_ACTIVITY_TYPES = [
   'ai_summary',
   'ai_recommendation',
   'ai_email_draft',
+  'ai_deal_brief',
 ];
 
 function daysSince(date: Date | null, ref: Date): number | null {
@@ -34,6 +35,7 @@ function safeSummary(p: Record<string, unknown>, type: string): { titleOrSummary
     : type === 'email' ? (p.subject as string)?.slice(0, 200)
     : type === 'task' ? (p.title as string)?.slice(0, 200)
     : type === 'ai_summary' ? (p.text as string)?.slice(0, 200)
+    : type === 'ai_deal_brief' ? (p.briefMarkdown as string)?.slice(0, 200)
     : undefined;
   const notes = (p.outcome as string) ?? (p.nextStep as string) ?? undefined;
   return { titleOrSummary, notes };

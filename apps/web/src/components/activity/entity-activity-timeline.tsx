@@ -52,11 +52,21 @@ function ActivityItem({
   canDelete,
   onDelete,
   isDeleting,
+  onUpdateTaskStatus,
+  markingTaskId,
+  canEdit,
 }: {
   activity: Activity;
   canDelete: boolean;
   onDelete: (id: string) => void;
   isDeleting: string | null;
+  onUpdateTaskStatus?: (
+    activityId: string,
+    currentPayload: Record<string, unknown>,
+    newStatus: "done" | "open"
+  ) => void;
+  markingTaskId?: string | null;
+  canEdit?: boolean;
 }) {
   const p = activity.payload ?? {};
   const m = activity.metadata ?? {};
@@ -108,17 +118,48 @@ function ActivityItem({
       }
       case "note":
         return <p className="text-sm text-gray-700">{String(p.text ?? "")}</p>;
-      case "task":
+      case "task": {
+        const taskStatus = String(p.status ?? "").toLowerCase();
+        const isDone = taskStatus === "done";
+        const showTaskActions = canEdit && onUpdateTaskStatus;
+        const isMarking = markingTaskId === activity.id;
         return (
           <div className="text-sm">
             <p className="font-medium text-gray-900">{String(p.title ?? "")}</p>
-            {p.status != null && p.status !== "" ? (
-              <span className="inline-block rounded px-1.5 py-0.5 text-xs text-amber-800 bg-amber-100">
-                {String(p.status)}
-              </span>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              {p.status != null && p.status !== "" ? (
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 text-xs ${
+                    taskStatus === "done" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {String(p.status)}
+                </span>
+              ) : null}
+              {showTaskActions && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateTaskStatus?.(
+                      activity.id,
+                      (activity.payload as Record<string, unknown>) ?? {},
+                      isDone ? "open" : "done"
+                    )
+                  }
+                  disabled={isMarking}
+                  className={
+                    isDone
+                      ? "rounded border border-gray-500 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      : "rounded border border-emerald-600 bg-white px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                  }
+                >
+                  {isMarking ? "Updating…" : isDone ? "Re-open" : "Mark Done"}
+                </button>
+              )}
+            </div>
           </div>
         );
+      }
       case "call":
       case "meeting":
         return (
@@ -170,6 +211,17 @@ function ActivityItem({
           </div>
         );
       }
+      case "ai_deal_brief": {
+        const brief = String(p.briefMarkdown ?? "");
+        return (
+          <div className="space-y-1">
+            <span className="inline-block rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800">
+              AI Deal Brief
+            </span>
+            <p className="text-sm text-gray-700 line-clamp-3 whitespace-pre-wrap">{brief || "Deal brief generated."}</p>
+          </div>
+        );
+      }
       case "file_uploaded": {
         const filename = String(p.filename ?? "File");
         const pathVal = p.path as string | undefined;
@@ -203,7 +255,8 @@ function ActivityItem({
         const toStage = String(p.toStage ?? "—");
         const reason = p.reason ? String(p.reason) : null;
         const competitor = p.competitor ? String(p.competitor) : null;
-        const notes = p.notes ? String(p.notes) : null;
+        const notesRaw = p.notes ?? p.note;
+        const notes = notesRaw != null && String(notesRaw).trim() !== "" ? String(notesRaw) : null;
         return (
           <div className="space-y-1 text-sm">
             <p className="text-gray-700">
@@ -218,7 +271,10 @@ function ActivityItem({
               </p>
             )}
             {notes && (
-              <p className="text-gray-600 line-clamp-2">{notes}</p>
+              <div className="mt-1 rounded border border-gray-100 bg-gray-50/80 px-2 py-1.5">
+                <p className="text-xs font-medium text-gray-500">Note</p>
+                <p className="whitespace-pre-wrap text-gray-700">{notes}</p>
+              </div>
             )}
           </div>
         );
@@ -297,7 +353,8 @@ export function EntityActivityTimeline({
   refreshTrigger,
 }: EntityActivityTimelineProps) {
   const { user } = useAuth();
-  const canDelete = canWrite(user?.role);
+  const canEdit = canWrite(user?.role);
+  const canDelete = canEdit;
   const [data, setData] = useState<PaginatedActivities | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -305,6 +362,7 @@ export function EntityActivityTimeline({
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [markingTaskId, setMarkingTaskId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchActivities = useCallback(async () => {
@@ -347,6 +405,31 @@ export function EntityActivityTimeline({
       setDeletingId(null);
     }
   };
+
+  const handleUpdateTaskStatus = useCallback(
+    async (
+      activityId: string,
+      currentPayload: Record<string, unknown>,
+      newStatus: "done" | "open"
+    ) => {
+      setMarkingTaskId(activityId);
+      setError(null);
+      try {
+        await apiFetch(`/activities/${activityId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ payload: { ...currentPayload, status: newStatus } }),
+        });
+        setPage(1);
+        fetchActivities();
+      } catch (err: unknown) {
+        const e = err as { body?: { message?: string }; message?: string };
+        setError(e.body?.message ?? e.message ?? "Failed to update task");
+      } finally {
+        setMarkingTaskId(null);
+      }
+    },
+    [fetchActivities]
+  );
 
   if (loading && !data) return <p className="mt-4 text-sm text-gray-500">Loading activities...</p>;
 
@@ -405,6 +488,9 @@ export function EntityActivityTimeline({
                 canDelete={canDelete}
                 onDelete={(id) => setDeleteId(id)}
                 isDeleting={deletingId}
+                onUpdateTaskStatus={canEdit ? handleUpdateTaskStatus : undefined}
+                markingTaskId={markingTaskId}
+                canEdit={canEdit}
               />
             ))}
           </div>

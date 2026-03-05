@@ -15,13 +15,15 @@ interface AddActivityModalProps {
   presetType?: string;
 }
 
+/** Activity types that are appropriate for a user to manually add (excludes system-generated e.g. stage_change, file_uploaded, ai_*) */
+const MANUAL_ADD_ACTIVITY_TYPES = ["note", "call", "meeting", "email", "task"] as const;
+
 type PayloadState = {
   note: { text: string };
   call: { summary: string; outcome: string; nextStep: string };
   meeting: { summary: string; outcome: string; nextStep: string };
   email: { subject: string; body: string; direction: string };
   task: { title: string; dueAt: string; status: string };
-  ai_summary: { text: string };
 };
 
 const initialPayload: PayloadState = {
@@ -30,11 +32,10 @@ const initialPayload: PayloadState = {
   meeting: { summary: "", outcome: "", nextStep: "" },
   email: { subject: "", body: "", direction: "" },
   task: { title: "", dueAt: "", status: "open" },
-  ai_summary: { text: "" },
 };
 
-/** Valid activity type values (used here to avoid reading ACTIVITY_TYPES at module load and causing a circular dependency) */
-const VALID_ACTIVITY_TYPE_VALUES = ["note", "call", "meeting", "email", "task", "ai_summary"];
+/** Valid activity type values for preset (must be subset of MANUAL_ADD_ACTIVITY_TYPES) */
+const VALID_ACTIVITY_TYPE_VALUES = [...MANUAL_ADD_ACTIVITY_TYPES];
 
 export function AddActivityModal({
   isOpen,
@@ -44,15 +45,13 @@ export function AddActivityModal({
   onSuccess,
   presetType,
 }: AddActivityModalProps) {
-  const [type, setType] = useState<(typeof ACTIVITY_TYPES)[number]["value"]>("note");
+  const [type, setType] = useState<string>("note");
   const [payload, setPayload] = useState<PayloadState>(initialPayload);
 
   useEffect(() => {
     if (isOpen) {
       const initialType =
-        presetType && VALID_ACTIVITY_TYPE_VALUES.includes(presetType)
-          ? (presetType as (typeof ACTIVITY_TYPES)[number]["value"])
-          : "note";
+        presetType && VALID_ACTIVITY_TYPE_VALUES.includes(presetType) ? presetType : "note";
       setType(initialType);
     }
   }, [isOpen, presetType]);
@@ -95,13 +94,6 @@ export function AddActivityModal({
         return;
       }
     }
-    if (activeType === "ai_summary") {
-      const text = (p as { text?: string }).text?.trim();
-      if (!text) {
-        setErrors({ text: "AI summary text is required" });
-        return;
-      }
-    }
 
     const buildPayload = () => {
       switch (activeType) {
@@ -131,8 +123,6 @@ export function AddActivityModal({
             dueAt: (p as { dueAt: string }).dueAt?.trim() || undefined,
             status: (p as { status: string }).status || "open",
           };
-        case "ai_summary":
-          return { text: (p as { text: string }).text.trim() };
         default:
           return {};
       }
@@ -164,7 +154,9 @@ export function AddActivityModal({
   const activeType = (type || "note") as keyof PayloadState;
   const p = payload[activeType] ?? initialPayload.note;
 
-  const typeOptions = ACTIVITY_TYPES.filter((t) => t.value);
+  const typeOptions = ACTIVITY_TYPES.filter(
+    (t) => t.value && (MANUAL_ADD_ACTIVITY_TYPES as readonly string[]).includes(t.value)
+  );
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Add Activity">
@@ -175,7 +167,7 @@ export function AddActivityModal({
           <label className="block text-sm font-medium text-gray-700">Type</label>
           <select
             value={type}
-            onChange={(e) => setType(e.target.value as (typeof ACTIVITY_TYPES)[number]["value"])}
+            onChange={(e) => setType(e.target.value)}
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             {typeOptions.map((t) => (
@@ -348,25 +340,6 @@ export function AddActivityModal({
                 <option value="done">Done</option>
               </select>
             </div>
-          </div>
-        )}
-
-        {/* AI Summary */}
-        {activeType === "ai_summary" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Text *</label>
-            <textarea
-              value={(p as { text: string }).text}
-              onChange={(e) =>
-                setPayload((prev) => ({
-                  ...prev,
-                  ai_summary: { ...prev.ai_summary, text: e.target.value },
-                }))
-              }
-              rows={3}
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            {errors.text && <p className="mt-0.5 text-sm text-red-600">{errors.text}</p>}
           </div>
         )}
 

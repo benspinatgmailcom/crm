@@ -19,7 +19,6 @@ interface Opportunity {
   name: string;
   amount: { toString(): string } | null;
   stage: string | null;
-  probability: number | null;
   closeDate: string | null;
 }
 
@@ -64,7 +63,6 @@ export default function OpportunitiesPage() {
     name: "",
     amount: undefined,
     stage: "prospecting",
-    probability: undefined,
     closeDate: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -139,7 +137,6 @@ export default function OpportunitiesPage() {
       name: "",
       amount: undefined,
       stage: "prospecting",
-      probability: undefined,
       closeDate: "",
     });
     setFormErrors({});
@@ -154,7 +151,6 @@ export default function OpportunitiesPage() {
       name: opp.name,
       amount: opp.amount != null ? Number(opp.amount) : undefined,
       stage: opp.stage || "prospecting",
-      probability: opp.probability ?? undefined,
       closeDate: opp.closeDate ? opp.closeDate.slice(0, 10) : "",
     });
     setFormErrors({});
@@ -171,7 +167,6 @@ export default function OpportunitiesPage() {
       name: formData.name,
       amount: formData.amount,
       stage: formData.stage || undefined,
-      probability: formData.probability,
       closeDate: formData.closeDate || undefined,
     };
     const parsed = opportunitySchema.safeParse(payload);
@@ -194,7 +189,6 @@ export default function OpportunitiesPage() {
             name: parsed.data.name,
             amount: parsed.data.amount,
             stage: parsed.data.stage,
-            probability: parsed.data.probability,
             closeDate: parsed.data.closeDate,
           }),
         });
@@ -429,22 +423,6 @@ export default function OpportunitiesPage() {
               {formErrors.amount && (
                 <p className="mt-0.5 text-sm text-red-600">{formErrors.amount}</p>
               )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Probability %</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={formData.probability ?? ""}
-                onChange={(e) =>
-                  setFormData((d) => ({
-                    ...d,
-                    probability: e.target.value ? Number(e.target.value) : undefined,
-                  }))
-                }
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
