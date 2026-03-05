@@ -1,9 +1,12 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '@crm/db';
 import { FollowUpService } from './followup.service';
 import { FollowUpDraftService } from './draft/followup-draft.service';
+import { ListFollowupsDto } from './dto/list-followups.dto';
 import { SnoozeTaskDto } from './dto/snooze-task.dto';
 import { CreateDraftDto } from './draft/dto/create-draft.dto';
 import { MarkDraftSentDto } from './draft/dto/mark-sent.dto';
@@ -16,6 +19,27 @@ export class FollowUpController {
     private readonly followUpService: FollowUpService,
     private readonly draftService: FollowUpDraftService,
   ) {}
+
+  @Get('followups')
+  @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
+  @ApiOperation({ summary: 'List follow-up suggestions and open tasks across opportunities' })
+  @ApiQuery({ name: 'assignee', required: false, description: 'me | all | userId (admin only)' })
+  @ApiQuery({ name: 'opportunityId', required: false, description: 'Filter by opportunity ID' })
+  @ApiResponse({ status: 200, description: 'Returns { items }' })
+  async listFollowups(
+    @Query() dto: ListFollowupsDto,
+    @CurrentUser() user: User,
+  ): Promise<{ items: Array<{ kind: 'suggestion' | 'openTask'; id: string; opportunityId: string; opportunityName: string; ownerId: string | null; ownerEmail: string | null; title: string; description?: string; dueAt: string; createdAt: string; snoozedUntil?: string; severity?: string }> }> {
+    const userId = (user as { id?: string }).id;
+    if (!userId) throw new Error('User not found');
+    const isAdmin = (user as { role?: string }).role === 'ADMIN';
+    return this.followUpService.listAllFollowups(
+      dto.assignee ?? 'me',
+      dto.opportunityId,
+      userId,
+      isAdmin,
+    );
+  }
 
   @Post('followups/generate')
   @Roles(Role.ADMIN)

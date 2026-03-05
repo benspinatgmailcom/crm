@@ -60,6 +60,9 @@ export class EmailPayloadDto {
   direction?: 'inbound' | 'outbound';
 }
 
+export const TASK_PRIORITIES = ['low', 'medium', 'high'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
 export class TaskPayloadDto {
   @ApiProperty({ description: 'Task title' })
   @IsString()
@@ -77,6 +80,12 @@ export class TaskPayloadDto {
   @IsString()
   @IsIn(['open', 'done'])
   status?: 'open' | 'done';
+
+  @ApiPropertyOptional({ description: 'Priority', enum: TASK_PRIORITIES })
+  @IsOptional()
+  @IsString()
+  @IsIn(TASK_PRIORITIES)
+  priority?: TaskPriority;
 }
 
 export class StageChangePayloadDto {

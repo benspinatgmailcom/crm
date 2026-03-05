@@ -20,6 +20,7 @@ interface CreateActivityModalProps {
 type ActivityType = (typeof CREATABLE_ACTIVITY_TYPES)[number];
 
 const TASK_STATUSES = ["open", "in_progress", "done"] as const;
+const TASK_PRIORITIES = ["low", "medium", "high"] as const;
 const EMAIL_DIRECTIONS = ["inbound", "outbound"] as const;
 
 export function CreateActivityModal({
@@ -37,6 +38,7 @@ export function CreateActivityModal({
     title: "",
     status: "open" as string,
     dueAt: "",
+    priority: "" as string,
     summary: "",
     outcome: "",
     nextStep: "",
@@ -51,6 +53,7 @@ export function CreateActivityModal({
       title: "",
       status: "open",
       dueAt: "",
+      priority: "",
       summary: "",
       outcome: "",
       nextStep: "",
@@ -69,6 +72,7 @@ export function CreateActivityModal({
           title: form.title.trim() || "Untitled task",
           status: form.status,
           dueAt: form.dueAt || undefined,
+          priority: form.priority.trim() || undefined,
         };
       case "call":
       case "meeting":
@@ -200,6 +204,21 @@ export function CreateActivityModal({
                 onChange={(e) => setForm((f) => ({ ...f, dueAt: e.target.value }))}
                 className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+              <select
+                value={form.priority}
+                onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              >
+                <option value="">None</option>
+                {TASK_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </option>
+                ))}
+              </select>
             </div>
           </>
         )}

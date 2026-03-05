@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, Check, X, Pencil, Eye, Copy, Send, FileText, RefreshCw, Loader2, Users, UserPlus, ChevronRight } from "lucide-react";
+import { Heart, Clock, CheckCircle, AlertTriangle, XCircle, Activity, ListTodo, Check, X, Pencil, Eye, Copy, Send, FileText, RefreshCw, Loader2, Users, UserPlus, ChevronRight, Target, Info } from "lucide-react";
 import { ActionIconButton } from "@/components/ui/action-icon-button";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/context/auth-context";
@@ -743,7 +743,10 @@ export default function OpportunityDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Sales process</h2>
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <Target className="h-4 w-4" />
+              Sales process
+            </h2>
             <div className="flex flex-wrap items-center gap-0.5 text-sm">
               {SALES_PROCESS_STAGES.map((stage, index) => {
                 const isCurrent = (opportunity.stage ?? "prospecting") === stage;
@@ -788,7 +791,10 @@ export default function OpportunityDetailPage() {
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-sm font-semibold text-gray-900">Opportunity details</h2>
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+              <Info className="h-4 w-4" />
+              Opportunity details
+            </h2>
             <div className="grid grid-cols-1 gap-6 text-sm sm:grid-cols-2">
               <dl className="space-y-2">
                 <div>
@@ -880,7 +886,10 @@ export default function OpportunityDetailPage() {
 
           {(opportunity.healthScore != null || opportunity.daysSinceLastTouch != null || opportunity.daysInStage != null) && (
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-gray-900">Deal health & aging</h2>
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <Heart className="h-4 w-4" />
+                Deal health & aging
+              </h2>
               <div className="space-y-4">
                 {opportunity.healthScore != null && opportunity.healthStatus != null && (
                   <div className="flex gap-3">

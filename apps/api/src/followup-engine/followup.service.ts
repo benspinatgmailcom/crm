@@ -339,6 +339,86 @@ export class FollowUpService {
   }
 
   /**
+   * List all follow-up suggestions and open tasks across opportunities, with optional assignee and opportunity filter.
+   */
+  async listAllFollowups(
+    assignee: string,
+    opportunityIdFilter: string | undefined,
+    currentUserId: string,
+    isAdmin: boolean,
+  ): Promise<{ items: Array<{ kind: 'suggestion' | 'openTask'; id: string; opportunityId: string; opportunityName: string; ownerId: string | null; ownerEmail: string | null; title: string; description?: string; dueAt: string; createdAt: string; snoozedUntil?: string; severity?: 'warning' | 'critical' }> }> {
+    const where: { ownerId?: string; id?: string } = {};
+    if (assignee === 'me') {
+      where.ownerId = currentUserId;
+    } else if (assignee !== 'all' && isAdmin && assignee) {
+      where.ownerId = assignee;
+    } else if (assignee !== 'all') {
+      where.ownerId = currentUserId;
+    }
+    if (opportunityIdFilter) {
+      where.id = opportunityIdFilter;
+    }
+
+    const opportunities = await this.prisma.opportunity.findMany({
+      where,
+      select: { id: true, name: true, ownerId: true, owner: { select: { email: true } } },
+    });
+
+    const items: Array<{
+      kind: 'suggestion' | 'openTask';
+      id: string;
+      opportunityId: string;
+      opportunityName: string;
+      ownerId: string | null;
+      ownerEmail: string | null;
+      title: string;
+      description?: string;
+      dueAt: string;
+      createdAt: string;
+      snoozedUntil?: string;
+      severity?: 'warning' | 'critical';
+    }> = [];
+
+    for (const opp of opportunities) {
+      const { suggestions: sugs, openTasks: tasks } = await this.listOpportunityFollowups(opp.id);
+      const ownerEmail = opp.owner?.email ?? null;
+      for (const s of sugs) {
+        items.push({
+          kind: 'suggestion',
+          id: s.id,
+          opportunityId: opp.id,
+          opportunityName: opp.name,
+          ownerId: opp.ownerId,
+          ownerEmail,
+          title: s.metadata.title,
+          description: s.metadata.description,
+          dueAt: s.metadata.suggestedDueAt,
+          createdAt: s.createdAt.toISOString(),
+          severity: s.metadata.severity,
+        });
+      }
+      for (const t of tasks) {
+        items.push({
+          kind: 'openTask',
+          id: t.id,
+          opportunityId: opp.id,
+          opportunityName: opp.name,
+          ownerId: opp.ownerId,
+          ownerEmail,
+          title: t.metadata.title,
+          description: t.metadata.description,
+          dueAt: t.metadata.dueAt,
+          createdAt: t.createdAt.toISOString(),
+          snoozedUntil: t.snoozedUntil?.toISOString(),
+        });
+      }
+    }
+
+    items.sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+    return { items };
+  }
+
+  /**
    * Create a task from a suggestion activity. Writes task_created and does not update suggestion (immutable).
    */
   async createTaskFromSuggestion(suggestionActivityId: string): Promise<{ id: string; metadata: TaskCreatedMetadata; createdAt: Date }> {

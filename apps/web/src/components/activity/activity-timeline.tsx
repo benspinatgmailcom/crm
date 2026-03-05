@@ -6,7 +6,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { useAuth } from "@/context/auth-context";
 import { canWrite } from "@/lib/roles";
 import { ActionIconButton } from "@/components/ui/action-icon-button";
-import { Eye } from "lucide-react";
+import { Eye, Activity } from "lucide-react";
 import { AddActivityModal } from "./add-activity-modal";
 import { GenerateAiSummaryModal } from "./generate-ai-summary-modal";
 import { DraftEmailModal } from "@/components/ai/draft-email-modal";
@@ -604,7 +604,10 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
   return (
     <div className="mt-4 border-t border-gray-200 pt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Activity Timeline</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <Activity className="h-4 w-4" />
+          Activity Timeline
+        </h3>
         <div className="flex items-center gap-2">
           <select
             value={typeFilter}
@@ -690,13 +693,17 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
         <>
           <div className="mt-3 space-y-0">
             {activitiesToShow.map((activity) => (
-              <ActivityItem
+              <div
                 key={activity.id}
-                activity={activity}
-                onUpdateTaskStatus={canEdit ? handleUpdateTaskStatus : undefined}
-                markingTaskId={markingTaskId}
-                canEdit={canEdit}
-              />
+                className="border-b border-gray-200 py-3 last:border-b-0 last:pb-0 first:pt-0"
+              >
+                <ActivityItem
+                  activity={activity}
+                  onUpdateTaskStatus={canEdit ? handleUpdateTaskStatus : undefined}
+                  markingTaskId={markingTaskId}
+                  canEdit={canEdit}
+                />
+              </div>
             ))}
           </div>
           <div className="mt-3">
