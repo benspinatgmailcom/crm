@@ -701,9 +701,9 @@ export function ActivityTimeline({ entityType, entityId, refreshTrigger, draftEm
           </div>
           <div className="mt-3">
             <Pagination
-              page={data.page}
-              pageSize={data.pageSize}
-              total={data.total}
+              page={data?.page ?? 1}
+              pageSize={data?.pageSize ?? 10}
+              total={data?.total ?? 0}
               onPageChange={setPage}
               onPageSizeChange={(v) => {
                 setPageSize(v);
