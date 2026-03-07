@@ -45,9 +45,9 @@ function safeSummary(p: Record<string, unknown>, type: string): { titleOrSummary
 export class DraftContextBuilder {
   constructor(private readonly prisma: PrismaService) {}
 
-  async buildFromSuggestion(suggestionActivityId: string): Promise<DraftContextBrief> {
+  async buildFromSuggestion(suggestionActivityId: string, tenantId: string): Promise<DraftContextBrief> {
     const suggestion = await this.prisma.activity.findFirst({
-      where: { id: suggestionActivityId, entityType: ENTITY_OPPORTUNITY, type: 'followup_suggested', deletedAt: null },
+      where: { id: suggestionActivityId, tenantId, entityType: ENTITY_OPPORTUNITY, type: 'followup_suggested', deletedAt: null },
       select: { id: true, entityId: true, metadata: true },
     });
     if (!suggestion) throw new NotFoundException(`Suggestion ${suggestionActivityId} not found`);
@@ -60,12 +60,12 @@ export class DraftContextBuilder {
       title: String(meta.title ?? 'Follow-up'),
       description: String(meta.description ?? ''),
     };
-    return this.buildBrief(opportunityId, trigger, { suggestionActivityId });
+    return this.buildBrief(opportunityId, trigger, { suggestionActivityId }, tenantId);
   }
 
-  async buildFromTask(taskActivityId: string): Promise<DraftContextBrief> {
+  async buildFromTask(taskActivityId: string, tenantId: string): Promise<DraftContextBrief> {
     const task = await this.prisma.activity.findFirst({
-      where: { id: taskActivityId, entityType: ENTITY_OPPORTUNITY, type: 'task_created', deletedAt: null },
+      where: { id: taskActivityId, tenantId, entityType: ENTITY_OPPORTUNITY, type: 'task_created', deletedAt: null },
       select: { id: true, entityId: true, metadata: true },
     });
     if (!task) throw new NotFoundException(`Task ${taskActivityId} not found`);
@@ -78,16 +78,17 @@ export class DraftContextBuilder {
       title: String(meta.title ?? 'Task'),
       description: String(meta.description ?? ''),
     };
-    return this.buildBrief(opportunityId, trigger, { taskActivityId });
+    return this.buildBrief(opportunityId, trigger, { taskActivityId }, tenantId);
   }
 
   private async buildBrief(
     opportunityId: string,
     trigger: DraftContextBrief['trigger'],
     source: { suggestionActivityId?: string; taskActivityId?: string },
+    tenantId: string,
   ): Promise<DraftContextBrief> {
-    const opp = await this.prisma.opportunity.findUnique({
-      where: { id: opportunityId },
+    const opp = await this.prisma.opportunity.findFirst({
+      where: { id: opportunityId, tenantId },
       select: {
         id: true,
         name: true,
@@ -114,6 +115,7 @@ export class DraftContextBuilder {
 
     const recentActivities = await this.prisma.activity.findMany({
       where: {
+        tenantId,
         entityType: ENTITY_OPPORTUNITY,
         entityId: opportunityId,
         type: { in: CONTENT_ACTIVITY_TYPES },

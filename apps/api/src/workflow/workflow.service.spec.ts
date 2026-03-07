@@ -8,8 +8,8 @@ describe('WorkflowService', () => {
 
   const mockPrisma = {
     opportunity: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
     },
   };
 
@@ -32,23 +32,24 @@ describe('WorkflowService', () => {
 
   describe('updateLastActivityAt', () => {
     const opportunityId = 'opp-1';
+    const tenantId = 'tenant-1';
 
     it('updates when lastActivityAt is null', async () => {
-      mockPrisma.opportunity.findUnique.mockResolvedValue({
+      mockPrisma.opportunity.findFirst.mockResolvedValue({
         id: opportunityId,
         lastActivityAt: null,
       });
-      mockPrisma.opportunity.update.mockResolvedValue({});
+      mockPrisma.opportunity.updateMany.mockResolvedValue({ count: 1 });
 
       const createdAt = new Date('2025-02-01T12:00:00Z');
-      await service.updateLastActivityAt(opportunityId, createdAt);
+      await service.updateLastActivityAt(opportunityId, createdAt, tenantId);
 
-      expect(prisma.opportunity.findUnique).toHaveBeenCalledWith({
-        where: { id: opportunityId },
+      expect(prisma.opportunity.findFirst).toHaveBeenCalledWith({
+        where: { id: opportunityId, tenantId },
         select: { lastActivityAt: true },
       });
-      expect(prisma.opportunity.update).toHaveBeenCalledWith({
-        where: { id: opportunityId },
+      expect(prisma.opportunity.updateMany).toHaveBeenCalledWith({
+        where: { id: opportunityId, tenantId },
         data: { lastActivityAt: createdAt },
       });
     });
@@ -56,16 +57,16 @@ describe('WorkflowService', () => {
     it('updates when createdAt is newer than lastActivityAt', async () => {
       const older = new Date('2025-01-01T00:00:00Z');
       const newer = new Date('2025-02-01T12:00:00Z');
-      mockPrisma.opportunity.findUnique.mockResolvedValue({
+      mockPrisma.opportunity.findFirst.mockResolvedValue({
         id: opportunityId,
         lastActivityAt: older,
       });
-      mockPrisma.opportunity.update.mockResolvedValue({});
+      mockPrisma.opportunity.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.updateLastActivityAt(opportunityId, newer);
+      await service.updateLastActivityAt(opportunityId, newer, tenantId);
 
-      expect(prisma.opportunity.update).toHaveBeenCalledWith({
-        where: { id: opportunityId },
+      expect(prisma.opportunity.updateMany).toHaveBeenCalledWith({
+        where: { id: opportunityId, tenantId },
         data: { lastActivityAt: newer },
       });
     });
@@ -73,34 +74,34 @@ describe('WorkflowService', () => {
     it('does not update when createdAt is older (idempotency)', async () => {
       const older = new Date('2025-01-01T00:00:00Z');
       const newer = new Date('2025-02-01T12:00:00Z');
-      mockPrisma.opportunity.findUnique.mockResolvedValue({
+      mockPrisma.opportunity.findFirst.mockResolvedValue({
         id: opportunityId,
         lastActivityAt: newer,
       });
 
-      await service.updateLastActivityAt(opportunityId, older);
+      await service.updateLastActivityAt(opportunityId, older, tenantId);
 
-      expect(prisma.opportunity.update).not.toHaveBeenCalled();
+      expect(prisma.opportunity.updateMany).not.toHaveBeenCalled();
     });
 
     it('does not update when createdAt equals lastActivityAt', async () => {
       const same = new Date('2025-02-01T12:00:00Z');
-      mockPrisma.opportunity.findUnique.mockResolvedValue({
+      mockPrisma.opportunity.findFirst.mockResolvedValue({
         id: opportunityId,
         lastActivityAt: same,
       });
 
-      await service.updateLastActivityAt(opportunityId, same);
+      await service.updateLastActivityAt(opportunityId, same, tenantId);
 
-      expect(prisma.opportunity.update).not.toHaveBeenCalled();
+      expect(prisma.opportunity.updateMany).not.toHaveBeenCalled();
     });
 
     it('does nothing when opportunity does not exist', async () => {
-      mockPrisma.opportunity.findUnique.mockResolvedValue(null);
+      mockPrisma.opportunity.findFirst.mockResolvedValue(null);
 
-      await service.updateLastActivityAt(opportunityId, new Date());
+      await service.updateLastActivityAt(opportunityId, new Date(), tenantId);
 
-      expect(prisma.opportunity.update).not.toHaveBeenCalled();
+      expect(prisma.opportunity.updateMany).not.toHaveBeenCalled();
     });
   });
 });

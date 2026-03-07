@@ -10,13 +10,14 @@ import { UpdateContactDto } from './dto/update-contact.dto';
 export class ContactService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateContactDto): Promise<Contact> {
-    const account = await this.prisma.account.findUnique({ where: { id: dto.accountId } });
+  async create(dto: CreateContactDto, tenantId: string): Promise<Contact> {
+    const account = await this.prisma.account.findFirst({ where: { id: dto.accountId, tenantId } });
     if (!account) throw new NotFoundException(`Account ${dto.accountId} not found`);
 
     try {
       return await this.prisma.contact.create({
         data: {
+          tenantId,
           accountId: dto.accountId,
           firstName: dto.firstName,
           lastName: dto.lastName,
@@ -32,10 +33,10 @@ export class ContactService {
     }
   }
 
-  async findAll(query: QueryContactDto): Promise<PaginatedResult<Contact>> {
+  async findAll(query: QueryContactDto, tenantId: string): Promise<PaginatedResult<Contact>> {
     const { page = 1, pageSize = 20, name, accountId, email, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
-    const and: Prisma.ContactWhereInput[] = [];
+    const and: Prisma.ContactWhereInput[] = [{ tenantId }];
     if (accountId) and.push({ accountId });
     if (email) and.push({ email: { contains: email, mode: 'insensitive' } });
     if (name) {
@@ -46,7 +47,7 @@ export class ContactService {
         ],
       });
     }
-    const where: Prisma.ContactWhereInput = and.length ? { AND: and } : {};
+    const where: Prisma.ContactWhereInput = { AND: and };
 
     const [data, total] = await Promise.all([
       this.prisma.contact.findMany({
@@ -61,14 +62,14 @@ export class ContactService {
     return { data, page, pageSize, total };
   }
 
-  async findOne(id: string): Promise<Contact> {
-    const contact = await this.prisma.contact.findUnique({ where: { id } });
+  async findOne(id: string, tenantId: string): Promise<Contact> {
+    const contact = await this.prisma.contact.findFirst({ where: { id, tenantId } });
     if (!contact) throw new NotFoundException(`Contact ${id} not found`);
     return contact;
   }
 
-  async update(id: string, dto: UpdateContactDto): Promise<Contact> {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateContactDto, tenantId: string): Promise<Contact> {
+    await this.findOne(id, tenantId);
     try {
       return await this.prisma.contact.update({
         where: { id },
@@ -82,8 +83,8 @@ export class ContactService {
     }
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(id: string, tenantId: string): Promise<void> {
+    await this.findOne(id, tenantId);
     await this.prisma.contact.delete({ where: { id } });
   }
 }

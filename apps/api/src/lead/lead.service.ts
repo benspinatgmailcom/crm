@@ -29,10 +29,11 @@ function parseName(name: string): { firstName: string; lastName: string } {
 export class LeadService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateLeadDto): Promise<Lead> {
+  async create(dto: CreateLeadDto, tenantId: string): Promise<Lead> {
     try {
       return await this.prisma.lead.create({
         data: {
+          tenantId,
           name: dto.name,
           email: dto.email,
           company: dto.company,
@@ -48,10 +49,10 @@ export class LeadService {
     }
   }
 
-  async findAll(query: QueryLeadDto): Promise<PaginatedResult<Lead>> {
+  async findAll(query: QueryLeadDto, tenantId: string): Promise<PaginatedResult<Lead>> {
     const { page = 1, pageSize = 20, status, q, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
-    const where: Prisma.LeadWhereInput = {};
+    const where: Prisma.LeadWhereInput = { tenantId };
     if (status) where.status = status;
     if (q) {
       where.OR = [
@@ -74,14 +75,14 @@ export class LeadService {
     return { data, page, pageSize, total };
   }
 
-  async findOne(id: string): Promise<Lead> {
-    const lead = await this.prisma.lead.findUnique({ where: { id } });
+  async findOne(id: string, tenantId: string): Promise<Lead> {
+    const lead = await this.prisma.lead.findFirst({ where: { id, tenantId } });
     if (!lead) throw new NotFoundException(`Lead ${id} not found`);
     return lead;
   }
 
-  async update(id: string, dto: UpdateLeadDto): Promise<Lead> {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateLeadDto, tenantId: string): Promise<Lead> {
+    await this.findOne(id, tenantId);
     try {
       return await this.prisma.lead.update({
         where: { id },
@@ -95,13 +96,13 @@ export class LeadService {
     }
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(id: string, tenantId: string): Promise<void> {
+    await this.findOne(id, tenantId);
     await this.prisma.lead.delete({ where: { id } });
   }
 
-  async convert(id: string, dto: ConvertLeadDto | undefined, ownerId: string): Promise<ConvertLeadResult> {
-    const lead = await this.findOne(id);
+  async convert(id: string, dto: ConvertLeadDto | undefined, ownerId: string, tenantId: string): Promise<ConvertLeadResult> {
+    const lead = await this.findOne(id, tenantId);
     if (lead.convertedAt) {
       throw new BadRequestException('Lead has already been converted');
     }
@@ -116,6 +117,7 @@ export class LeadService {
     const result = await this.prisma.$transaction(async (tx) => {
       const account = await tx.account.create({
         data: {
+          tenantId,
           name: accountName,
           sourceLeadId: lead.id,
         },
@@ -123,6 +125,7 @@ export class LeadService {
 
       const contact = await tx.contact.create({
         data: {
+          tenantId,
           accountId: account.id,
           firstName,
           lastName,
@@ -132,6 +135,7 @@ export class LeadService {
       });
 
       const opportunityData = {
+        tenantId,
         accountId: account.id,
         name: opportunityName,
         stage: dto?.opportunityStage?.trim() || 'prospecting',
@@ -154,6 +158,7 @@ export class LeadService {
 
       const initialTask = await tx.activity.create({
         data: {
+          tenantId,
           entityType: 'opportunity',
           entityId: opportunity.id,
           type: 'task',
@@ -163,6 +168,7 @@ export class LeadService {
 
       await tx.activity.create({
         data: {
+          tenantId,
           entityType: 'lead',
           entityId: lead.id,
           type: 'task',
@@ -172,6 +178,7 @@ export class LeadService {
 
       await tx.activity.create({
         data: {
+          tenantId,
           entityType: 'lead',
           entityId: lead.id,
           type: 'lead_converted',

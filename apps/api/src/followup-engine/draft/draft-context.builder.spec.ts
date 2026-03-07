@@ -46,7 +46,7 @@ describe('DraftContextBuilder', () => {
               findMany: jest.fn(),
             },
             opportunity: {
-              findUnique: jest.fn(),
+              findFirst: jest.fn(),
             },
           },
         },
@@ -60,10 +60,10 @@ describe('DraftContextBuilder', () => {
   describe('buildFromSuggestion', () => {
     it('returns brief with opportunity, trigger, recentActivitySummary, constraints', async () => {
       (prisma.activity.findFirst as jest.Mock).mockResolvedValue(mockSuggestion);
-      (prisma.opportunity.findUnique as jest.Mock).mockResolvedValue(mockOpportunity);
+      (prisma.opportunity.findFirst as jest.Mock).mockResolvedValue(mockOpportunity);
       (prisma.activity.findMany as jest.Mock).mockResolvedValue(mockActivities);
 
-      const brief = await builder.buildFromSuggestion('sug-1');
+      const brief = await builder.buildFromSuggestion('sug-1', 'tenant-1');
 
       expect(brief.opportunity.id).toBe('opp-1');
       expect(brief.opportunity.name).toBe('Test Opp');
@@ -77,7 +77,7 @@ describe('DraftContextBuilder', () => {
     it('throws NotFoundException when suggestion not found', async () => {
       (prisma.activity.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(builder.buildFromSuggestion('missing')).rejects.toThrow(NotFoundException);
+      await expect(builder.buildFromSuggestion('missing', 'tenant-1')).rejects.toThrow(NotFoundException);
     });
   });
 });

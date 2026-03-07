@@ -1,4 +1,5 @@
 export enum Role {
+  GLOBAL_ADMIN = 'GLOBAL_ADMIN',
   ADMIN = 'ADMIN',
   USER = 'USER',
   VIEWER = 'VIEWER',

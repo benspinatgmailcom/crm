@@ -21,7 +21,7 @@ export interface SearchResponse {
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async search(q: string, limit = 5): Promise<SearchResponse> {
+  async search(q: string, limit = 5, tenantId: string): Promise<SearchResponse> {
     const term = q.trim();
     if (term.length < 2) {
       return {
@@ -41,6 +41,7 @@ export class SearchService {
     const [accounts, contacts, leads, opportunities] = await Promise.all([
       this.prisma.account.findMany({
         where: {
+          tenantId,
           OR: [
             { name: contains },
             { industry: contains },
@@ -52,6 +53,7 @@ export class SearchService {
       }),
       this.prisma.contact.findMany({
         where: {
+          tenantId,
           OR: [
             { firstName: contains },
             { lastName: contains },
@@ -69,6 +71,7 @@ export class SearchService {
       }),
       this.prisma.lead.findMany({
         where: {
+          tenantId,
           OR: [
             { name: contains },
             { email: contains },
@@ -80,6 +83,7 @@ export class SearchService {
       }),
       this.prisma.opportunity.findMany({
         where: {
+          tenantId,
           OR: [
             { name: contains },
             { stage: contains },

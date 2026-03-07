@@ -49,18 +49,22 @@ export class UsersService {
     private readonly emailService: EmailService,
   ) {}
 
-  /** Active users for owner dropdown (id, email, role). */
-  async findActiveForDropdown(): Promise<UserActiveItem[]> {
+  /** Active users for owner dropdown (id, email, role). Scoped by tenant when tenantId is set. */
+  async findActiveForDropdown(tenantId: string | null): Promise<UserActiveItem[]> {
     const users = await this.prisma.user.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        ...(tenantId != null && { tenantId }),
+      },
       select: { id: true, email: true, role: true },
       orderBy: { email: 'asc' },
     });
     return users;
   }
 
-  async findAll(): Promise<UserListItem[]> {
+  async findAll(tenantId: string | null): Promise<UserListItem[]> {
     const users = await this.prisma.user.findMany({
+      where: tenantId != null ? { tenantId } : undefined,
       select: {
         id: true,
         email: true,
@@ -71,7 +75,7 @@ export class UsersService {
       orderBy: { createdAt: 'desc' },
     });
     const lastLogins = await this.prisma.refreshToken.findMany({
-      where: { revokedAt: null },
+      where: { revokedAt: null, ...(tenantId != null && { tenantId }) },
       select: { userId: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -87,9 +91,12 @@ export class UsersService {
     }));
   }
 
-  async create(dto: CreateUserDto): Promise<CreateUserResult> {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+  async create(dto: CreateUserDto, tenantId: string | null): Promise<CreateUserResult> {
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        email: dto.email,
+        tenantId: tenantId == null ? { equals: null } : tenantId,
+      },
     });
     if (existing) {
       throw new ConflictException('User with this email already exists');
@@ -107,16 +114,18 @@ export class UsersService {
         role: dto.role,
         isActive: true,
         mustChangePassword: true,
+        ...(tenantId != null && { tenantId }),
       },
     });
 
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-
-    await this.prisma.passwordResetToken.create({
-      data: { userId: user.id, tokenHash, expiresAt },
-    });
+    if (tenantId != null) {
+      await this.prisma.passwordResetToken.create({
+        data: { userId: user.id, tenantId, tokenHash, expiresAt },
+      });
+    }
 
     try {
       await this.emailService.sendSetPasswordEmail(user.email, rawToken);
@@ -134,8 +143,10 @@ export class UsersService {
     };
   }
 
-  async update(id: string, dto: UpdateUserDto): Promise<UserListItem> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+  async update(id: string, dto: UpdateUserDto, tenantId: string | null): Promise<UserListItem> {
+    const user = await this.prisma.user.findFirst({
+      where: tenantId != null ? { id, tenantId } : { id },
+    });
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
@@ -158,18 +169,22 @@ export class UsersService {
     return { ...updated, lastLoginAt: null };
   }
 
-  async resetPassword(id: string, _dto: ResetPasswordDto): Promise<ResetPasswordResult> {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+  async resetPassword(id: string, _dto: ResetPasswordDto, tenantId: string | null): Promise<ResetPasswordResult> {
+    const user = await this.prisma.user.findFirst({
+      where: tenantId != null ? { id, tenantId } : { id },
+    });
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
-
+    if (user.tenantId == null) {
+      throw new BadRequestException('Password reset for platform users is not supported via this endpoint');
+    }
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     await this.prisma.passwordResetToken.create({
-      data: { userId: user.id, tokenHash, expiresAt },
+      data: { userId: user.id, tenantId: user.tenantId, tokenHash, expiresAt },
     });
 
     try {

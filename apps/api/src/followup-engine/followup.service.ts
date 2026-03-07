@@ -29,13 +29,12 @@ export class FollowUpService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Generate follow-up suggestions for all open opportunities.
-   * Fetches opportunities in one query, evaluates in-memory, bulk-fetches activities for dedupe, then creates new suggestions where allowed.
+   * Generate follow-up suggestions for all open opportunities in the given tenant.
    */
-  async generateSuggestionsForOpenOpportunities(now: Date = new Date()): Promise<{ created: number; skipped: number; errors: number }> {
+  async generateSuggestionsForOpenOpportunities(tenantId: string, now: Date = new Date()): Promise<{ created: number; skipped: number; errors: number }> {
     const openStages = ['prospecting', 'qualification', 'discovery', 'proposal', 'negotiation'];
     const opportunities = await this.prisma.opportunity.findMany({
-      where: { stage: { in: openStages } },
+      where: { tenantId, stage: { in: openStages } },
       select: {
         id: true,
         stage: true,
@@ -91,6 +90,7 @@ export class FollowUpService {
     const opportunityIds = [...new Set(allSpecs.map((s) => s.opportunityId))];
     const activities = await this.prisma.activity.findMany({
       where: {
+        tenantId,
         entityType: ENTITY_TYPE_OPPORTUNITY,
         entityId: { in: opportunityIds },
         type: { in: [TYPES_SUGGESTION, TYPES_TASK, ...TYPES_STATE] },
@@ -184,6 +184,7 @@ export class FollowUpService {
       try {
         await this.prisma.activity.create({
           data: {
+            tenantId,
             entityType: ENTITY_TYPE_OPPORTUNITY,
             entityId: opportunityId,
             type: TYPES_SUGGESTION,
@@ -219,9 +220,9 @@ export class FollowUpService {
 
   /**
    * List suggestions (SUGGESTED, not superseded by open task) and open tasks for an opportunity.
-   * Includes latest draft per suggestion/task when present.
+   * Includes latest draft per suggestion/task when present. Tenant-scoped.
    */
-  async listOpportunityFollowups(opportunityId: string): Promise<{
+  async listOpportunityFollowups(opportunityId: string, tenantId: string): Promise<{
     suggestions: Array<{
       id: string;
       metadata: FollowupSuggestionMetadata;
@@ -239,6 +240,7 @@ export class FollowUpService {
     const [activities, drafts] = await Promise.all([
       this.prisma.activity.findMany({
         where: {
+          tenantId,
           entityType: ENTITY_TYPE_OPPORTUNITY,
           entityId: opportunityId,
           type: { in: [TYPES_SUGGESTION, TYPES_TASK, ...TYPES_STATE] },
@@ -249,6 +251,7 @@ export class FollowUpService {
       }),
       this.prisma.activity.findMany({
         where: {
+          tenantId,
           entityType: ENTITY_TYPE_OPPORTUNITY,
           entityId: opportunityId,
           type: 'followup_draft_created',
@@ -339,15 +342,16 @@ export class FollowUpService {
   }
 
   /**
-   * List all follow-up suggestions and open tasks across opportunities, with optional assignee and opportunity filter.
+   * List all follow-up suggestions and open tasks across opportunities, with optional assignee and opportunity filter. Tenant-scoped.
    */
   async listAllFollowups(
     assignee: string,
     opportunityIdFilter: string | undefined,
     currentUserId: string,
     isAdmin: boolean,
+    tenantId: string,
   ): Promise<{ items: Array<{ kind: 'suggestion' | 'openTask'; id: string; opportunityId: string; opportunityName: string; ownerId: string | null; ownerEmail: string | null; title: string; description?: string; dueAt: string; createdAt: string; snoozedUntil?: string; severity?: 'warning' | 'critical' }> }> {
-    const where: { ownerId?: string; id?: string } = {};
+    const where: { ownerId?: string; id?: string; tenantId: string } = { tenantId };
     if (assignee === 'me') {
       where.ownerId = currentUserId;
     } else if (assignee !== 'all' && isAdmin && assignee) {
@@ -380,7 +384,7 @@ export class FollowUpService {
     }> = [];
 
     for (const opp of opportunities) {
-      const { suggestions: sugs, openTasks: tasks } = await this.listOpportunityFollowups(opp.id);
+      const { suggestions: sugs, openTasks: tasks } = await this.listOpportunityFollowups(opp.id, tenantId);
       const ownerEmail = opp.owner?.email ?? null;
       for (const s of sugs) {
         items.push({
@@ -419,11 +423,11 @@ export class FollowUpService {
   }
 
   /**
-   * Create a task from a suggestion activity. Writes task_created and does not update suggestion (immutable).
+   * Create a task from a suggestion activity. Tenant-scoped.
    */
-  async createTaskFromSuggestion(suggestionActivityId: string): Promise<{ id: string; metadata: TaskCreatedMetadata; createdAt: Date }> {
+  async createTaskFromSuggestion(suggestionActivityId: string, tenantId: string): Promise<{ id: string; metadata: TaskCreatedMetadata; createdAt: Date }> {
     const suggestion = await this.prisma.activity.findFirst({
-      where: { id: suggestionActivityId, deletedAt: null, type: TYPES_SUGGESTION },
+      where: { id: suggestionActivityId, tenantId, deletedAt: null, type: TYPES_SUGGESTION },
     });
     if (!suggestion) throw new NotFoundException(`Suggestion ${suggestionActivityId} not found`);
     const meta = suggestion.metadata as Record<string, unknown> | null;
@@ -437,6 +441,7 @@ export class FollowUpService {
     const dueAt = suggestedDueAt ? new Date(suggestedDueAt) : new Date();
     const task = await this.prisma.activity.create({
       data: {
+        tenantId,
         entityType: ENTITY_TYPE_OPPORTUNITY,
         entityId,
         type: TYPES_TASK,
@@ -461,14 +466,16 @@ export class FollowUpService {
   }
 
   /**
-   * Mark a task as completed. Creates task_completed activity.
+   * Mark a task as completed. Creates task_completed activity. Tenant-scoped.
    */
-  async completeTask(taskActivityId: string): Promise<void> {
-    await this.ensureOpenTask(taskActivityId);
+  async completeTask(taskActivityId: string, tenantId: string): Promise<void> {
+    await this.ensureOpenTask(taskActivityId, tenantId);
+    const entityId = await this.getEntityIdForTask(taskActivityId, tenantId);
     await this.prisma.activity.create({
       data: {
+        tenantId,
         entityType: ENTITY_TYPE_OPPORTUNITY,
-        entityId: await this.getEntityIdForTask(taskActivityId),
+        entityId,
         type: 'task_completed',
         payload: {},
         metadata: { taskActivityId, status: 'COMPLETED' } as Prisma.InputJsonValue,
@@ -477,14 +484,16 @@ export class FollowUpService {
   }
 
   /**
-   * Dismiss a task. Creates task_dismissed activity.
+   * Dismiss a task. Creates task_dismissed activity. Tenant-scoped.
    */
-  async dismissTask(taskActivityId: string): Promise<void> {
-    await this.ensureOpenTask(taskActivityId);
+  async dismissTask(taskActivityId: string, tenantId: string): Promise<void> {
+    await this.ensureOpenTask(taskActivityId, tenantId);
+    const entityId = await this.getEntityIdForTask(taskActivityId, tenantId);
     await this.prisma.activity.create({
       data: {
+        tenantId,
         entityType: ENTITY_TYPE_OPPORTUNITY,
-        entityId: await this.getEntityIdForTask(taskActivityId),
+        entityId,
         type: 'task_dismissed',
         payload: {},
         metadata: { taskActivityId, status: 'DISMISSED' } as Prisma.InputJsonValue,
@@ -493,14 +502,16 @@ export class FollowUpService {
   }
 
   /**
-   * Snooze a task until a given time. Creates task_snoozed activity.
+   * Snooze a task until a given time. Tenant-scoped.
    */
-  async snoozeTask(taskActivityId: string, until: Date): Promise<void> {
-    await this.ensureOpenTask(taskActivityId);
+  async snoozeTask(taskActivityId: string, until: Date, tenantId: string): Promise<void> {
+    await this.ensureOpenTask(taskActivityId, tenantId);
+    const entityId = await this.getEntityIdForTask(taskActivityId, tenantId);
     await this.prisma.activity.create({
       data: {
+        tenantId,
         entityType: ENTITY_TYPE_OPPORTUNITY,
-        entityId: await this.getEntityIdForTask(taskActivityId),
+        entityId,
         type: 'task_snoozed',
         payload: {},
         metadata: {
@@ -512,18 +523,18 @@ export class FollowUpService {
     });
   }
 
-  private async ensureOpenTask(taskActivityId: string): Promise<void> {
+  private async ensureOpenTask(taskActivityId: string, tenantId: string): Promise<void> {
     const task = await this.prisma.activity.findFirst({
-      where: { id: taskActivityId, type: TYPES_TASK, deletedAt: null },
+      where: { id: taskActivityId, tenantId, type: TYPES_TASK, deletedAt: null },
     });
     if (!task) throw new NotFoundException(`Task ${taskActivityId} not found`);
     const meta = task.metadata as Record<string, unknown> | null;
     if ((meta?.status as string) !== 'OPEN') throw new BadRequestException('Task is not open');
   }
 
-  private async getEntityIdForTask(taskActivityId: string): Promise<string> {
+  private async getEntityIdForTask(taskActivityId: string, tenantId: string): Promise<string> {
     const task = await this.prisma.activity.findFirst({
-      where: { id: taskActivityId, type: TYPES_TASK, deletedAt: null },
+      where: { id: taskActivityId, tenantId, type: TYPES_TASK, deletedAt: null },
       select: { entityId: true },
     });
     if (!task) throw new NotFoundException(`Task ${taskActivityId} not found`);

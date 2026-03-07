@@ -2,9 +2,12 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Contact } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { requireTenantId } from '../common/tenant.util';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { ContactService } from './contact.service';
+import type { User } from '@crm/db';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { QueryContactDto } from './dto/query-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
@@ -21,8 +24,9 @@ export class ContactController {
   @ApiResponse({ status: 201, description: 'Contact created' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 404, description: 'Account not found' })
-  create(@Body() dto: CreateContactDto): Promise<Contact> {
-    return this.contactService.create(dto);
+  create(@Body() dto: CreateContactDto, @CurrentUser() user: User): Promise<Contact> {
+    const tenantId = requireTenantId(user);
+    return this.contactService.create(dto, tenantId);
   }
 
   @Get()
@@ -32,8 +36,9 @@ export class ContactController {
     description: 'Query params: page (default 1), pageSize (default 20), accountId, email (contains), name (contains first/last), sortBy (firstName|lastName|email|createdAt), sortDir (asc|desc)',
   })
   @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
-  findAll(@Query() query: QueryContactDto): Promise<PaginatedResult<Contact>> {
-    return this.contactService.findAll(query);
+  findAll(@Query() query: QueryContactDto, @CurrentUser() user: User): Promise<PaginatedResult<Contact>> {
+    const tenantId = requireTenantId(user);
+    return this.contactService.findAll(query, tenantId);
   }
 
   @Get(':id')
@@ -41,8 +46,9 @@ export class ContactController {
   @ApiOperation({ summary: 'Get contact by ID' })
   @ApiResponse({ status: 200, description: 'Contact found' })
   @ApiResponse({ status: 404, description: 'Contact not found' })
-  findOne(@Param('id') id: string): Promise<Contact> {
-    return this.contactService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User): Promise<Contact> {
+    const tenantId = requireTenantId(user);
+    return this.contactService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -50,8 +56,9 @@ export class ContactController {
   @ApiOperation({ summary: 'Update contact' })
   @ApiResponse({ status: 200, description: 'Contact updated' })
   @ApiResponse({ status: 404, description: 'Contact not found' })
-  update(@Param('id') id: string, @Body() dto: UpdateContactDto): Promise<Contact> {
-    return this.contactService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateContactDto, @CurrentUser() user: User): Promise<Contact> {
+    const tenantId = requireTenantId(user);
+    return this.contactService.update(id, dto, tenantId);
   }
 
   @Delete(':id')
@@ -59,7 +66,8 @@ export class ContactController {
   @ApiOperation({ summary: 'Delete contact' })
   @ApiResponse({ status: 204, description: 'Contact deleted' })
   @ApiResponse({ status: 404, description: 'Contact not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.contactService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: User): Promise<void> {
+    const tenantId = requireTenantId(user);
+    await this.contactService.remove(id, tenantId);
   }
 }

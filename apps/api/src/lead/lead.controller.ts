@@ -2,10 +2,12 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Lead } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { requireTenantId } from '../common/tenant.util';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { LeadService } from './lead.service';
+import type { User } from '@crm/db';
 import { ConvertLeadDto } from './dto/convert-lead.dto';
 import { CreateLeadDto } from './dto/create-lead.dto';
 import { QueryLeadDto } from './dto/query-lead.dto';
@@ -23,8 +25,9 @@ export class LeadController {
   @ApiResponse({ status: 201, description: 'Lead created' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 409, description: 'Conflict' })
-  create(@Body() dto: CreateLeadDto): Promise<Lead> {
-    return this.leadService.create(dto);
+  create(@Body() dto: CreateLeadDto, @CurrentUser() user: User): Promise<Lead> {
+    const tenantId = requireTenantId(user);
+    return this.leadService.create(dto, tenantId);
   }
 
   @Get()
@@ -34,8 +37,9 @@ export class LeadController {
     description: 'Query params: page (default 1), pageSize (default 20), status, q (search name/email/company), sortBy (name|createdAt|status), sortDir (asc|desc)',
   })
   @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
-  findAll(@Query() query: QueryLeadDto): Promise<PaginatedResult<Lead>> {
-    return this.leadService.findAll(query);
+  findAll(@Query() query: QueryLeadDto, @CurrentUser() user: User): Promise<PaginatedResult<Lead>> {
+    const tenantId = requireTenantId(user);
+    return this.leadService.findAll(query, tenantId);
   }
 
   @Post(':id/convert')
@@ -47,9 +51,10 @@ export class LeadController {
   convert(
     @Param('id') id: string,
     @Body() dto: ConvertLeadDto | undefined,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: User,
   ) {
-    return this.leadService.convert(id, dto, userId);
+    const tenantId = requireTenantId(user);
+    return this.leadService.convert(id, dto, user.id, tenantId);
   }
 
   @Get(':id')
@@ -57,8 +62,9 @@ export class LeadController {
   @ApiOperation({ summary: 'Get lead by ID' })
   @ApiResponse({ status: 200, description: 'Lead found' })
   @ApiResponse({ status: 404, description: 'Lead not found' })
-  findOne(@Param('id') id: string): Promise<Lead> {
-    return this.leadService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User): Promise<Lead> {
+    const tenantId = requireTenantId(user);
+    return this.leadService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -67,8 +73,9 @@ export class LeadController {
   @ApiResponse({ status: 200, description: 'Lead updated' })
   @ApiResponse({ status: 404, description: 'Lead not found' })
   @ApiResponse({ status: 409, description: 'Conflict' })
-  update(@Param('id') id: string, @Body() dto: UpdateLeadDto): Promise<Lead> {
-    return this.leadService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateLeadDto, @CurrentUser() user: User): Promise<Lead> {
+    const tenantId = requireTenantId(user);
+    return this.leadService.update(id, dto, tenantId);
   }
 
   @Delete(':id')
@@ -76,7 +83,8 @@ export class LeadController {
   @ApiOperation({ summary: 'Delete lead' })
   @ApiResponse({ status: 204, description: 'Lead deleted' })
   @ApiResponse({ status: 404, description: 'Lead not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.leadService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: User): Promise<void> {
+    const tenantId = requireTenantId(user);
+    await this.leadService.remove(id, tenantId);
   }
 }

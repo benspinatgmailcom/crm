@@ -57,39 +57,42 @@ export class FollowUpDraftService {
   async generateDraftFromSuggestion(
     suggestionId: string,
     options: CreateDraftOptions = {},
+    tenantId: string,
   ): Promise<{ id: string; subject: string; body: string; metadata: Record<string, unknown> }> {
-    const brief = await this.contextBuilder.buildFromSuggestion(suggestionId);
+    const brief = await this.contextBuilder.buildFromSuggestion(suggestionId, tenantId);
     const suggestion = await this.prisma.activity.findFirst({
-      where: { id: suggestionId, type: 'followup_suggested', deletedAt: null },
+      where: { id: suggestionId, tenantId, type: 'followup_suggested', deletedAt: null },
       select: { entityId: true },
     });
     if (!suggestion) throw new NotFoundException(`Suggestion ${suggestionId} not found`);
     return this.generateAndPersist(brief, suggestion.entityId, {
       suggestionActivityId: suggestionId,
       ...options,
-    });
+    }, tenantId);
   }
 
   async generateDraftFromTask(
     taskId: string,
     options: CreateDraftOptions = {},
+    tenantId: string,
   ): Promise<{ id: string; subject: string; body: string; metadata: Record<string, unknown> }> {
-    const brief = await this.contextBuilder.buildFromTask(taskId);
+    const brief = await this.contextBuilder.buildFromTask(taskId, tenantId);
     const task = await this.prisma.activity.findFirst({
-      where: { id: taskId, type: 'task_created', deletedAt: null },
+      where: { id: taskId, tenantId, type: 'task_created', deletedAt: null },
       select: { entityId: true },
     });
     if (!task) throw new NotFoundException(`Task ${taskId} not found`);
     return this.generateAndPersist(brief, task.entityId, {
       taskActivityId: taskId,
       ...options,
-    });
+    }, tenantId);
   }
 
   private async generateAndPersist(
     brief: DraftContextBrief,
     opportunityId: string,
     source: CreateDraftOptions & { suggestionActivityId?: string; taskActivityId?: string },
+    tenantId: string,
   ): Promise<{ id: string; subject: string; body: string; metadata: Record<string, unknown> }> {
     const channel = source.channel ?? 'email';
     const tone = source.tone ?? 'friendly';
@@ -178,6 +181,7 @@ Always include "assumptions" and "questionsToConfirm" arrays (empty array if non
 
     const activity = await this.prisma.activity.create({
       data: {
+        tenantId,
         entityType: ENTITY_OPPORTUNITY,
         entityId: opportunityId,
         type: TYPE_DRAFT,
@@ -197,9 +201,10 @@ Always include "assumptions" and "questionsToConfirm" arrays (empty array if non
   async markDraftSent(
     draftActivityId: string,
     body: { channel: DraftChannel; notes?: string },
+    tenantId: string,
   ): Promise<void> {
     const draft = await this.prisma.activity.findFirst({
-      where: { id: draftActivityId, type: TYPE_DRAFT, deletedAt: null },
+      where: { id: draftActivityId, tenantId, type: TYPE_DRAFT, deletedAt: null },
       select: { id: true, entityId: true, metadata: true },
     });
     if (!draft) throw new NotFoundException(`Draft ${draftActivityId} not found`);
@@ -210,6 +215,7 @@ Always include "assumptions" and "questionsToConfirm" arrays (empty array if non
 
     await this.prisma.activity.create({
       data: {
+        tenantId,
         entityType: ENTITY_OPPORTUNITY,
         entityId: draft.entityId,
         type: TYPE_SENT,
@@ -223,6 +229,6 @@ Always include "assumptions" and "questionsToConfirm" arrays (empty array if non
       },
     });
 
-    await this.workflow.updateLastActivityAt(draft.entityId, new Date());
+    await this.workflow.updateLastActivityAt(draft.entityId, new Date(), tenantId);
   }
 }

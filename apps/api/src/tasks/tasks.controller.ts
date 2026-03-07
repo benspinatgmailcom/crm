@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { requireTenantId } from '../common/tenant.util';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -28,10 +29,11 @@ export class TasksController {
     @Query() query: QueryTasksDto,
     @CurrentUser() user: User,
   ): Promise<PaginatedResult<TaskListItem>> {
+    const tenantId = requireTenantId(user);
     const userId = (user as { id?: string }).id;
     if (!userId) throw new Error('User not found');
     const isAdmin = (user as { role?: string }).role === 'ADMIN';
-    return this.tasksService.findAll(query, userId, isAdmin);
+    return this.tasksService.findAll(query, userId, isAdmin, tenantId);
   }
 
   @Patch(':id')
@@ -42,7 +44,9 @@ export class TasksController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateTaskDto,
+    @CurrentUser() user: User,
   ): Promise<TaskListItem> {
-    return this.tasksService.update(id, dto);
+    const tenantId = requireTenantId(user);
+    return this.tasksService.update(id, dto, tenantId);
   }
 }

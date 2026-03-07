@@ -16,6 +16,7 @@ const currentUser = {
 };
 
 const adminUser = { ...currentUser, id: 'admin-1', role: 'ADMIN' };
+const tenantId = 'tenant-1';
 
 describe('PipelineHealthService', () => {
   let service: PipelineHealthService;
@@ -72,22 +73,22 @@ describe('PipelineHealthService', () => {
   describe('RBAC', () => {
     it('enforces owner=me for non-admin when owner=all is passed', async () => {
       const query: PipelineHealthQueryDto = { owner: 'all' };
-      const result = await service.getPipelineHealth(currentUser as any, query);
+      const result = await service.getPipelineHealth(currentUser as any, query, tenantId);
       expect(result.filtersEcho.owner).toBe('me');
       expect(mockPrisma.opportunity.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.objectContaining({ ownerId: 'user-1' }),
+          where: expect.objectContaining({ tenantId, ownerId: 'user-1' }),
         }),
       );
     });
 
     it('allows owner=all for admin', async () => {
       const query: PipelineHealthQueryDto = { owner: 'all' };
-      const result = await service.getPipelineHealth(adminUser as any, query);
+      const result = await service.getPipelineHealth(adminUser as any, query, tenantId);
       expect(result.filtersEcho.owner).toBe('all');
       expect(mockPrisma.opportunity.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: expect.not.objectContaining({ ownerId: expect.anything() }),
+          where: expect.objectContaining({ tenantId }),
         }),
       );
     });
@@ -95,14 +96,14 @@ describe('PipelineHealthService', () => {
     it('throws when non-admin requests another userId', async () => {
       const query: PipelineHealthQueryDto = { owner: 'other-user-id' };
       await expect(
-        service.getPipelineHealth(currentUser as any, query),
+        service.getPipelineHealth(currentUser as any, query, tenantId),
       ).rejects.toThrow(ForbiddenException);
     });
   });
 
   describe('response shape', () => {
     it('returns filtersEcho, summary, topDrivers, byStage, queue', async () => {
-      const result = await service.getPipelineHealth(currentUser as any, {});
+      const result = await service.getPipelineHealth(currentUser as any, {}, tenantId);
       expect(result).toHaveProperty('filtersEcho');
       expect(result).toHaveProperty('summary');
       expect(result).toHaveProperty('topDrivers');
@@ -132,14 +133,14 @@ describe('PipelineHealthService', () => {
       const result = await service.getPipelineHealth(currentUser as any, {
         page: 2,
         pageSize: 1,
-      });
+      }, tenantId);
       expect(result.queue.page).toBe(2);
       expect(result.queue.pageSize).toBe(1);
       expect(result.queue.items.length).toBeLessThanOrEqual(1);
     });
 
     it('queue items have followup flags', async () => {
-      const result = await service.getPipelineHealth(currentUser as any, {});
+      const result = await service.getPipelineHealth(currentUser as any, {}, tenantId);
       for (const item of result.queue.items) {
         expect(item.followup).toEqual({
           hasSuggestion: expect.any(Boolean),

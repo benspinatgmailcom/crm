@@ -10,10 +10,11 @@ import { UpdateAccountDto } from './dto/update-account.dto';
 export class AccountService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateAccountDto): Promise<Account> {
+  async create(dto: CreateAccountDto, tenantId: string): Promise<Account> {
     try {
       return await this.prisma.account.create({
         data: {
+          tenantId,
           name: dto.name,
           industry: dto.industry,
           website: dto.website,
@@ -27,10 +28,10 @@ export class AccountService {
     }
   }
 
-  async findAll(query: QueryAccountDto): Promise<PaginatedResult<Account>> {
+  async findAll(query: QueryAccountDto, tenantId: string): Promise<PaginatedResult<Account>> {
     const { page = 1, pageSize = 20, name, industry, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
-    const where: Prisma.AccountWhereInput = {};
+    const where: Prisma.AccountWhereInput = { tenantId };
     if (name) where.name = { contains: name, mode: 'insensitive' };
     if (industry) where.industry = { contains: industry, mode: 'insensitive' };
 
@@ -47,14 +48,14 @@ export class AccountService {
     return { data, page, pageSize, total };
   }
 
-  async findOne(id: string): Promise<Account> {
-    const account = await this.prisma.account.findUnique({ where: { id } });
+  async findOne(id: string, tenantId: string): Promise<Account> {
+    const account = await this.prisma.account.findFirst({ where: { id, tenantId } });
     if (!account) throw new NotFoundException(`Account ${id} not found`);
     return account;
   }
 
-  async update(id: string, dto: UpdateAccountDto): Promise<Account> {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateAccountDto, tenantId: string): Promise<Account> {
+    await this.findOne(id, tenantId);
     try {
       return await this.prisma.account.update({
         where: { id },
@@ -68,8 +69,8 @@ export class AccountService {
     }
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(id: string, tenantId: string): Promise<void> {
+    await this.findOne(id, tenantId);
     await this.prisma.account.delete({ where: { id } });
   }
 }

@@ -12,14 +12,18 @@ import { apiFetch } from "@/lib/api-client";
 import {
   getAccessToken,
   getStoredUser,
+  getStoredTenant,
   setTokens,
+  setStoredTenant,
   clearTokens,
   updateStoredUser,
   type StoredUser,
+  type TenantBranding,
 } from "@/lib/auth-store";
 
 interface AuthContextValue {
   user: StoredUser | null;
+  tenant: TenantBranding | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -31,17 +35,37 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<StoredUser | null>(null);
+  const [tenant, setTenant] = useState<TenantBranding | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  const loadStoredAuth = useCallback(() => {
+  const fetchMe = useCallback(async () => {
+    const token = getAccessToken();
+    if (!token) return null;
+    try {
+      const data = await apiFetch<{ user: StoredUser; tenant: TenantBranding | null }>("/auth/me");
+      setUser(data.user);
+      setTenant(data.tenant ?? null);
+      updateStoredUser(data.user);
+      if (data.tenant) setStoredTenant(data.tenant);
+      else setStoredTenant(null);
+      return data;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const loadStoredAuth = useCallback(async () => {
     const token = getAccessToken();
     const storedUser = getStoredUser();
+    const storedTenant = getStoredTenant();
     if (token && storedUser) {
       setUser(storedUser);
+      setTenant(storedTenant ?? null);
+      await fetchMe();
     }
     setIsLoading(false);
-  }, []);
+  }, [fetchMe]);
 
   useEffect(() => {
     loadStoredAuth();
@@ -59,7 +83,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       setTokens(data.accessToken, data.refreshToken, data.user);
       setUser(data.user);
-      router.push(data.user.mustChangePassword ? "/change-password" : "/accounts");
+
+      // Redirect immediately so we don't get stuck if /auth/me is slow or fails
+      if (data.user.mustChangePassword) {
+        router.replace("/change-password");
+      } else if (data.user.role === "GLOBAL_ADMIN") {
+        router.replace("/platform");
+      } else {
+        router.replace("/accounts");
+      }
+
+      // Sync tenant from /auth/me in background (optional; avoids blocking redirect)
+      try {
+        const meData = await apiFetch<{ user: StoredUser; tenant: TenantBranding | null }>("/auth/me");
+        if (meData) {
+          setUser(meData.user);
+          setTenant(meData.tenant ?? null);
+          if (meData.tenant) setStoredTenant(meData.tenant);
+          else setStoredTenant(null);
+        }
+      } catch {
+        // Non-fatal: user already set from login response; tenant may stay null
+      }
     },
     [router]
   );
@@ -80,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       clearTokens();
       setUser(null);
+      setTenant(null);
       router.push("/login");
     }
   }, [router]);
@@ -91,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value: AuthContextValue = {
     user,
+    tenant,
     isLoading,
     isAuthenticated: !!user,
     login,

@@ -10,13 +10,14 @@ export class AiContextService {
   async buildContextPack(
     entityType: (typeof ENTITY_TYPES)[number],
     entityId: string,
+    tenantId: string,
     days: number = 30,
     activityLimit: number = 50,
   ): Promise<string> {
     const [entityText, activitiesText, attachmentText] = await Promise.all([
-      this.loadEntitySnapshot(entityType, entityId),
-      this.loadActivitiesText(entityType, entityId, days, activityLimit),
-      this.loadAttachmentText(entityType, entityId),
+      this.loadEntitySnapshot(entityType, entityId, tenantId),
+      this.loadActivitiesText(entityType, entityId, tenantId, days, activityLimit),
+      this.loadAttachmentText(entityType, entityId, tenantId),
     ]);
     return `## Entity snapshot\n${entityText}\n\n## Recent activities\n${activitiesText}${attachmentText}`;
   }
@@ -24,29 +25,30 @@ export class AiContextService {
   private async loadEntitySnapshot(
     entityType: (typeof ENTITY_TYPES)[number],
     entityId: string,
+    tenantId: string,
   ): Promise<string> {
     switch (entityType) {
       case 'account': {
-        const a = await this.prisma.account.findUnique({ where: { id: entityId } });
+        const a = await this.prisma.account.findFirst({ where: { id: entityId, tenantId } });
         if (!a) throw new NotFoundException(`Account ${entityId} not found`);
         return `Account: ${a.name}\nIndustry: ${a.industry ?? '—'}\nWebsite: ${a.website ?? '—'}`;
       }
       case 'contact': {
-        const c = await this.prisma.contact.findUnique({
-          where: { id: entityId },
+        const c = await this.prisma.contact.findFirst({
+          where: { id: entityId, tenantId },
           include: { account: true },
         });
         if (!c) throw new NotFoundException(`Contact ${entityId} not found`);
         return `Contact: ${c.firstName} ${c.lastName}\nEmail: ${c.email}\nAccount: ${c.account.name}`;
       }
       case 'lead': {
-        const l = await this.prisma.lead.findUnique({ where: { id: entityId } });
+        const l = await this.prisma.lead.findFirst({ where: { id: entityId, tenantId } });
         if (!l) throw new NotFoundException(`Lead ${entityId} not found`);
         return `Lead: ${l.name}\nEmail: ${l.email}\nCompany: ${l.company ?? '—'}\nStatus: ${l.status ?? '—'}`;
       }
       case 'opportunity': {
-        const o = await this.prisma.opportunity.findUnique({
-          where: { id: entityId },
+        const o = await this.prisma.opportunity.findFirst({
+          where: { id: entityId, tenantId },
           include: { account: true },
         });
         if (!o) throw new NotFoundException(`Opportunity ${entityId} not found`);
@@ -61,13 +63,14 @@ export class AiContextService {
   private async loadActivitiesText(
     entityType: string,
     entityId: string,
+    tenantId: string,
     days: number,
     limit: number,
   ): Promise<string> {
     const since = new Date();
     since.setDate(since.getDate() - days);
     const activities = await this.prisma.activity.findMany({
-      where: { entityType, entityId, createdAt: { gte: since } },
+      where: { tenantId, entityType, entityId, createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -89,10 +92,11 @@ export class AiContextService {
   private async loadAttachmentText(
     entityType: string,
     entityId: string,
+    tenantId: string,
     maxChars: number = 8000,
   ): Promise<string> {
     const attachments = await this.prisma.attachment.findMany({
-      where: { entityType, entityId },
+      where: { tenantId, entityType, entityId },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
@@ -111,22 +115,23 @@ export class AiContextService {
   async buildEmailContextPack(
     entityType: (typeof ENTITY_TYPES)[number],
     entityId: string,
+    tenantId: string,
     recipientEmail?: string,
     additionalContext?: string,
     maxTotalChars: number = 24000,
   ): Promise<string> {
     const [entityText, activitiesText, attachmentText] = await Promise.all([
-      this.loadEntitySnapshot(entityType, entityId),
-      this.loadActivitiesText(entityType, entityId, 30, 50),
-      this.loadAttachmentText(entityType, entityId, 8000),
+      this.loadEntitySnapshot(entityType, entityId, tenantId),
+      this.loadActivitiesText(entityType, entityId, tenantId, 30, 50),
+      this.loadAttachmentText(entityType, entityId, tenantId, 8000),
     ]);
 
     let recipientSection = '';
     if (recipientEmail) {
-      const inferred = await this.inferRecipientInfo(entityType, entityId, recipientEmail);
+      const inferred = await this.inferRecipientInfo(entityType, entityId, tenantId, recipientEmail);
       recipientSection = `\n\n## Recipient\nEmail: ${recipientEmail}${inferred ? `\nName: ${inferred}` : ''}`;
     } else {
-      const suggested = await this.getSuggestedRecipients(entityType, entityId);
+      const suggested = await this.getSuggestedRecipients(entityType, entityId, tenantId);
       if (suggested.length > 0) {
         recipientSection =
           '\n\n## Suggested recipients (from related contacts)\n' +
@@ -144,14 +149,15 @@ export class AiContextService {
   private async inferRecipientInfo(
     entityType: string,
     entityId: string,
+    tenantId: string,
     email: string,
   ): Promise<string | null> {
     if (entityType === 'contact') {
-      const c = await this.prisma.contact.findUnique({ where: { id: entityId } });
+      const c = await this.prisma.contact.findFirst({ where: { id: entityId, tenantId } });
       if (c?.email === email) return `${c.firstName} ${c.lastName}`.trim();
     }
     if (entityType === 'lead') {
-      const l = await this.prisma.lead.findUnique({ where: { id: entityId } });
+      const l = await this.prisma.lead.findFirst({ where: { id: entityId, tenantId } });
       if (l?.email === email) return l.name;
     }
     return null;
@@ -160,17 +166,18 @@ export class AiContextService {
   private async getSuggestedRecipients(
     entityType: string,
     entityId: string,
+    tenantId: string,
   ): Promise<{ name?: string; email: string }[]> {
     let accountId: string | null = null;
     if (entityType === 'opportunity') {
-      const o = await this.prisma.opportunity.findUnique({ where: { id: entityId } });
+      const o = await this.prisma.opportunity.findFirst({ where: { id: entityId, tenantId } });
       accountId = o?.accountId ?? null;
     } else if (entityType === 'account') {
       accountId = entityId;
     }
     if (!accountId) return [];
     const contacts = await this.prisma.contact.findMany({
-      where: { accountId },
+      where: { accountId, tenantId },
       take: 10,
     });
     return contacts.map((c) => ({

@@ -71,14 +71,15 @@ export class SeedStoryService {
     private readonly forecastService: OpportunityForecastService,
   ) {}
 
-  async wipeCrmData(): Promise<void> {
-    await this.prisma.activity.deleteMany();
-    await this.prisma.opportunityContact.deleteMany();
-    await this.prisma.opportunity.deleteMany();
-    await this.prisma.contact.deleteMany();
-    await this.prisma.lead.deleteMany();
-    await this.prisma.attachment.deleteMany();
-    await this.prisma.account.deleteMany();
+  async wipeCrmData(tenantId: string): Promise<void> {
+    const where = { tenantId };
+    await this.prisma.activity.deleteMany({ where });
+    await this.prisma.opportunityContact.deleteMany({ where });
+    await this.prisma.attachment.deleteMany({ where });
+    await this.prisma.opportunity.deleteMany({ where });
+    await this.prisma.contact.deleteMany({ where });
+    await this.prisma.lead.deleteMany({ where });
+    await this.prisma.account.deleteMany({ where });
   }
 
   async wipeUploads(): Promise<void> {
@@ -95,10 +96,13 @@ export class SeedStoryService {
     }
   }
 
-  private async getAdminUser(): Promise<{ id: string; email: string; role: string }> {
-    const user = await this.prisma.user.findFirst({ where: { role: 'ADMIN' } });
-    if (!user) throw new ForbiddenException('No ADMIN user found; create one first');
-    return user as { id: string; email: string; role: string };
+  private async getAdminUser(): Promise<{ id: string; email: string; role: string; tenantId: string }> {
+    const user = await this.prisma.user.findFirst({
+      where: { role: 'ADMIN', tenantId: { not: null } },
+      select: { id: true, email: true, role: true, tenantId: true },
+    });
+    if (!user?.tenantId) throw new ForbiddenException('No tenant-scoped ADMIN user found; create one first');
+    return user as { id: string; email: string; role: string; tenantId: string };
   }
 
   private async createActivityWithDate(
@@ -107,6 +111,7 @@ export class SeedStoryService {
     type: string,
     payload: Record<string, unknown>,
     createdAt: Date,
+    tenantId: string,
   ): Promise<void> {
     await this.prisma.activity.create({
       data: {
@@ -116,20 +121,28 @@ export class SeedStoryService {
         payload: payload as object,
         createdAt,
         updatedAt: createdAt,
+        tenantId,
       },
     });
   }
 
-  async seedStory(dto: SeedStoryDto): Promise<SeedStoryResult> {
+  async seedStory(dto: SeedStoryDto, currentUser: { id: string; tenantId: string | null; role: string }): Promise<SeedStoryResult> {
     const reset = dto.reset ?? false;
     const includeFiller = dto.includeFiller ?? false;
     const fillerCount = Math.max(0, Math.min(20, dto.fillerAccounts ?? 2));
 
-    const admin = await this.getAdminUser();
-    const user = admin as any;
+    const tenantId = currentUser.tenantId;
+    if (!tenantId) {
+      throw new ForbiddenException(
+        'Story seed requires a tenant-scoped admin. Log in as an admin for the tenant you want to seed (e.g. acme-admin@seed.local or northstar-admin@seed.local).',
+      );
+    }
+    const adminId = currentUser.id;
+    /** User shape for attachment/activity services; ensure tenantId is the seed tenant so lookups succeed. */
+    const user = { id: currentUser.id, tenantId, role: currentUser.role };
 
     if (reset) {
-      await this.wipeCrmData();
+      await this.wipeCrmData(tenantId);
       await this.wipeUploads();
     }
 
@@ -145,7 +158,7 @@ export class SeedStoryService {
 
     // --- Apex Data Centers ---
     let apexAccount = await this.prisma.account.findFirst({
-      where: { name: STORY_ACCOUNT_NAMES.APEX },
+      where: { name: STORY_ACCOUNT_NAMES.APEX, tenantId },
     });
     if (!apexAccount) {
       apexAccount = await this.prisma.account.create({
@@ -153,6 +166,7 @@ export class SeedStoryService {
           name: STORY_ACCOUNT_NAMES.APEX,
           industry: 'Data Centers / Colocation',
           website: 'https://apexdatacenters.com',
+          tenantId,
         },
       });
       accountsCreated++;
@@ -166,23 +180,23 @@ export class SeedStoryService {
       { firstName: 'Lisa', lastName: 'Nguyen', email: 'lisa.nguyen@apexdatacenters.com', title: 'Procurement Manager' },
       { firstName: 'David', lastName: 'Kim', email: 'david.kim@apexdatacenters.com', title: 'Solutions Architect' },
       { firstName: 'Rachel', lastName: 'Foster', email: 'rachel.foster@apexdatacenters.com', title: 'Facilities Ops Lead' },
-    ], reset, (n) => { contactsCreated += n; });
+    ], reset, (n) => { contactsCreated += n; }, tenantId);
 
     // Stale: touch>=7 or stage>=14. At-risk: touch 5–6 or stage 12–13.
     const apexOpps = await this.ensureOpportunities(apexId, [
       { name: 'Apex Renewal FY26', stage: 'negotiation', amount: 1_200_000, closeDaysOut: 21, lastActivityAtDaysAgo: 2, lastStageChangedAtDaysAgo: 3 },
       { name: 'Edge Expansion Phase 1', stage: 'proposal', amount: 450_000, closeDaysOut: 45, lastActivityAtDaysAgo: 8, lastStageChangedAtDaysAgo: 15 }, // stale
       { name: 'Disaster Recovery Add-on', stage: 'qualification', amount: 180_000, closeDaysOut: 60, lastActivityAtDaysAgo: 5, lastStageChangedAtDaysAgo: 12 }, // at-risk
-    ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
+    ], reset, (n) => { opportunitiesCreated += n; }, adminId, tenantId);
 
-    await this.seedApexActivities(apexId, apexContacts, apexOpps, reset, (n) => { activitiesCreated += n; });
-    await this.ensureDealTeams(apexOpps, apexContacts, ['Champion', 'Economic Buyer', 'Technical Stakeholder', 'Other', 'Other', 'Other']);
+    await this.seedApexActivities(apexId, apexContacts, apexOpps, reset, (n) => { activitiesCreated += n; }, tenantId);
+    await this.ensureDealTeams(apexOpps, apexContacts, ['Champion', 'Economic Buyer', 'Technical Stakeholder', 'Other', 'Other', 'Other'], tenantId);
     const apexAttachmentCount = await this.seedApexAttachments(apexId, apexOpps, user, reset);
     attachmentsCreated += apexAttachmentCount;
 
     // --- Northwind Telecom ---
     let northwindAccount = await this.prisma.account.findFirst({
-      where: { name: STORY_ACCOUNT_NAMES.NORTHWIND },
+      where: { name: STORY_ACCOUNT_NAMES.NORTHWIND, tenantId },
     });
     if (!northwindAccount) {
       northwindAccount = await this.prisma.account.create({
@@ -190,6 +204,7 @@ export class SeedStoryService {
           name: STORY_ACCOUNT_NAMES.NORTHWIND,
           industry: 'Telecommunications',
           website: 'https://northwindtelecom.com',
+          tenantId,
         },
       });
       accountsCreated++;
@@ -201,21 +216,21 @@ export class SeedStoryService {
       { firstName: 'Nancy', lastName: 'Hill', email: 'nancy.hill@northwindtelecom.com', title: 'VP Ops' },
       { firstName: 'Chris', lastName: 'Wright', email: 'chris.wright@northwindtelecom.com', title: 'Network Architect' },
       { firstName: 'Pat', lastName: 'Morgan', email: 'pat.morgan@northwindtelecom.com', title: 'Procurement' },
-    ], reset, (n) => { contactsCreated += n; });
+    ], reset, (n) => { contactsCreated += n; }, tenantId);
 
     const northwindOpps = await this.ensureOpportunities(northwindId, [
       { name: 'Core Network Modernization', stage: 'proposal', amount: 650_000, closeDaysOut: 30, lastActivityAtDaysAgo: 6, lastStageChangedAtDaysAgo: 13 }, // at-risk
       { name: 'Long-haul Fiber Connectivity', stage: 'qualification', amount: 300_000, closeDaysOut: 75, lastActivityAtDaysAgo: 10, lastStageChangedAtDaysAgo: 16 }, // stale
-    ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
+    ], reset, (n) => { opportunitiesCreated += n; }, adminId, tenantId);
 
-    await this.seedNorthwindActivities(northwindId, northwindContacts, northwindOpps, reset, (n) => { activitiesCreated += n; });
-    await this.ensureDealTeams(northwindOpps, northwindContacts, ['Champion', 'Economic Buyer', 'Technical Stakeholder', 'Other']);
+    await this.seedNorthwindActivities(northwindId, northwindContacts, northwindOpps, reset, (n) => { activitiesCreated += n; }, tenantId);
+    await this.ensureDealTeams(northwindOpps, northwindContacts, ['Champion', 'Economic Buyer', 'Technical Stakeholder', 'Other'], tenantId);
     const northwindAttachmentCount = await this.seedNorthwindAttachments(northwindId, northwindOpps, user, reset);
     attachmentsCreated += northwindAttachmentCount;
 
     // --- Globex Manufacturing ---
     let globexAccount = await this.prisma.account.findFirst({
-      where: { name: STORY_ACCOUNT_NAMES.GLOBEX },
+      where: { name: STORY_ACCOUNT_NAMES.GLOBEX, tenantId },
     });
     if (!globexAccount) {
       globexAccount = await this.prisma.account.create({
@@ -223,6 +238,7 @@ export class SeedStoryService {
           name: STORY_ACCOUNT_NAMES.GLOBEX,
           industry: 'Manufacturing',
           website: 'https://globexmfg.com',
+          tenantId,
         },
       });
       accountsCreated++;
@@ -233,24 +249,24 @@ export class SeedStoryService {
       { firstName: 'Frank', lastName: 'Miller', email: 'frank.miller@globexmfg.com', title: 'IT Director' },
       { firstName: 'Susan', lastName: 'Clark', email: 'susan.clark@globexmfg.com', title: 'Operations Lead' },
       { firstName: 'Robert', lastName: 'Lewis', email: 'robert.lewis@globexmfg.com', title: 'Finance Analyst' },
-    ], reset, (n) => { contactsCreated += n; });
+    ], reset, (n) => { contactsCreated += n; }, tenantId);
 
     const globexOpps = await this.ensureOpportunities(globexId, [
       { name: 'ERP Integration Modernization', stage: 'qualification', amount: 250_000, closeDaysOut: 90, lastActivityAtDaysAgo: 20, lastStageChangedAtDaysAgo: 25 }, // stale
-    ], reset, (n) => { opportunitiesCreated += n; }, admin.id);
+    ], reset, (n) => { opportunitiesCreated += n; }, adminId, tenantId);
 
-    await this.seedGlobexActivities(globexId, globexContacts, globexOpps, reset, (n) => { activitiesCreated += n; });
-    await this.ensureDealTeams(globexOpps, globexContacts, ['Champion', 'Technical Stakeholder', 'Other']);
+    await this.seedGlobexActivities(globexId, globexContacts, globexOpps, reset, (n) => { activitiesCreated += n; }, tenantId);
+    await this.ensureDealTeams(globexOpps, globexContacts, ['Champion', 'Technical Stakeholder', 'Other'], tenantId);
     const globexAttachmentCount = await this.seedGlobexAttachments(globexId, globexOpps, user, reset);
     attachmentsCreated += globexAttachmentCount;
 
     // --- Story leads (unconverted) ---
-    const storyLeadsCreated = await this.ensureStoryLeads(reset);
+    const storyLeadsCreated = await this.ensureStoryLeads(reset, tenantId);
     leadsCreated += storyLeadsCreated;
 
     // --- Filler ---
     if (includeFiller && fillerCount > 0) {
-      const fillerResult = await this.seedFillerAccounts(fillerCount, user);
+      const fillerResult = await this.seedFillerAccounts(fillerCount, user, tenantId);
       accountsCreated += fillerResult.accountsCreated;
       contactsCreated += fillerResult.contactsCreated;
       opportunitiesCreated += fillerResult.opportunitiesCreated;
@@ -258,8 +274,11 @@ export class SeedStoryService {
       attachmentsCreated += fillerResult.attachmentsCreated;
     }
 
-    // Populate forecast (win probability, forecast category, expected revenue) for all opportunities
-    const allOpps = await this.prisma.opportunity.findMany({ select: { id: true } });
+    // Populate forecast (win probability, forecast category, expected revenue) for this tenant's opportunities only
+    const allOpps = await this.prisma.opportunity.findMany({
+      where: { tenantId },
+      select: { id: true },
+    });
     for (const opp of allOpps) {
       await this.forecastService.recomputeForecast(opp.id).catch(() => {
         /* non-fatal per opportunity */
@@ -278,7 +297,7 @@ export class SeedStoryService {
   }
 
   /** Create story leads (unconverted). When reset, replace any existing with same email; otherwise only add missing. */
-  private async ensureStoryLeads(reset: boolean): Promise<number> {
+  private async ensureStoryLeads(reset: boolean, tenantId: string): Promise<number> {
     const storyLeads: Array<{ name: string; email: string; company: string | null; status: string; source: string | null }> = [
       { name: 'Jordan Reeves', email: 'jordan.reeves@metrocolocation.com', company: 'Metro Colocation', status: 'new', source: 'website' },
       { name: 'Sam Rivera', email: 'sam.rivera@metrocolocation.com', company: 'Metro Colocation', status: 'contacted', source: 'website' },
@@ -289,7 +308,7 @@ export class SeedStoryService {
     ];
     let created = 0;
     for (const lead of storyLeads) {
-      const existing = await this.prisma.lead.findFirst({ where: { email: lead.email } });
+      const existing = await this.prisma.lead.findFirst({ where: { email: lead.email, tenantId } });
       if (existing) {
         if (reset) {
           await this.prisma.lead.delete({ where: { id: existing.id } });
@@ -304,6 +323,7 @@ export class SeedStoryService {
           company: lead.company,
           status: lead.status,
           source: lead.source,
+          tenantId,
         },
       });
       created++;
@@ -316,16 +336,18 @@ export class SeedStoryService {
     opportunities: Array<{ id: string }>,
     contacts: Array<{ id: string }>,
     rolesByIndex: string[],
+    tenantId: string,
   ): Promise<void> {
     const maxContacts = Math.min(contacts.length, rolesByIndex.length);
     if (maxContacts === 0) return;
-    const data: Array<{ opportunityId: string; contactId: string; role: string }> = [];
+    const data: Array<{ opportunityId: string; contactId: string; role: string; tenantId: string }> = [];
     for (const opp of opportunities) {
       for (let i = 0; i < maxContacts; i++) {
         data.push({
           opportunityId: opp.id,
           contactId: contacts[i].id,
           role: rolesByIndex[i],
+          tenantId,
         });
       }
     }
@@ -339,6 +361,7 @@ export class SeedStoryService {
     list: Array<{ firstName: string; lastName: string; email: string; title?: string }>,
     reset: boolean,
     onCreated: (n: number) => void,
+    tenantId: string,
   ): Promise<Array<{ id: string; firstName: string; lastName: string; email: string }>> {
     const existing = await this.prisma.contact.findMany({ where: { accountId } });
     if (reset || existing.length === 0) {
@@ -348,6 +371,7 @@ export class SeedStoryService {
           this.prisma.contact.create({
             data: {
               accountId,
+              tenantId,
               firstName: c.firstName,
               lastName: c.lastName,
               email: c.email,
@@ -375,6 +399,7 @@ export class SeedStoryService {
     reset: boolean,
     onCreated: (n: number) => void,
     ownerId: string,
+    tenantId: string,
   ): Promise<Array<{ id: string; name: string }>> {
     const today = new Date();
     let existing = await this.prisma.opportunity.findMany({ where: { accountId } });
@@ -389,6 +414,7 @@ export class SeedStoryService {
         await this.prisma.opportunity.create({
           data: {
             accountId,
+            tenantId,
             name: o.name,
             stage: o.stage,
             amount: o.amount,
@@ -423,6 +449,7 @@ export class SeedStoryService {
     opps: Array<{ id: string; name: string }>,
     reset: boolean,
     onCreated: (n: number) => void,
+    tenantId: string,
   ): Promise<void> {
     if (!reset) {
       const count = await this.prisma.activity.count({
@@ -463,10 +490,10 @@ export class SeedStoryService {
 
     for (const a of activities) {
       const createdAt = daysAgo(a.daysAgo);
-      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt);
+      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt, tenantId);
       if (opps.length && a.daysAgo <= 60) {
         for (const opp of opps) {
-          await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt);
+          await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt, tenantId);
         }
       }
     }
@@ -498,6 +525,7 @@ export class SeedStoryService {
     opps: Array<{ id: string; name: string }>,
     reset: boolean,
     onCreated: (n: number) => void,
+    tenantId: string,
   ): Promise<void> {
     if (!reset) {
       const count = await this.prisma.activity.count({
@@ -530,9 +558,9 @@ export class SeedStoryService {
 
     for (const a of activities) {
       const createdAt = daysAgo(a.daysAgo);
-      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt);
+      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt, tenantId);
       for (const opp of opps) {
-        await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt);
+        await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt, tenantId);
       }
     }
     onCreated(activities.length * (1 + opps.length));
@@ -562,6 +590,7 @@ export class SeedStoryService {
     opps: Array<{ id: string; name: string }>,
     reset: boolean,
     onCreated: (n: number) => void,
+    tenantId: string,
   ): Promise<void> {
     if (!reset) {
       const count = await this.prisma.activity.count({
@@ -594,9 +623,9 @@ export class SeedStoryService {
 
     for (const a of activities) {
       const createdAt = daysAgo(a.daysAgo);
-      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt);
+      await this.createActivityWithDate('account', accountId, a.type, a.payload, createdAt, tenantId);
       for (const opp of opps) {
-        await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt);
+        await this.createActivityWithDate('opportunity', opp.id, a.type, a.payload, createdAt, tenantId);
       }
     }
     onCreated(activities.length * (1 + opps.length));
@@ -643,6 +672,7 @@ export class SeedStoryService {
   private async seedFillerAccounts(
     count: number,
     user: any,
+    tenantId: string,
   ): Promise<{
     accountsCreated: number;
     contactsCreated: number;
@@ -661,7 +691,7 @@ export class SeedStoryService {
 
     for (let i = 0; i < count; i++) {
       const name = companies[i % companies.length] + ` ${i}`;
-      const existing = await this.prisma.account.findFirst({ where: { name } });
+      const existing = await this.prisma.account.findFirst({ where: { name, tenantId } });
       if (existing) continue;
 
       const account = await this.prisma.account.create({
@@ -669,6 +699,7 @@ export class SeedStoryService {
           name,
           industry: industries[Math.floor(rand() * industries.length)],
           website: `https://${name.toLowerCase().replace(/\s/g, '')}.com`,
+          tenantId,
         },
       });
       accountsCreated++;
@@ -679,6 +710,7 @@ export class SeedStoryService {
         const contact = await this.prisma.contact.create({
           data: {
             accountId: account.id,
+            tenantId,
             firstName: `First${c}`,
             lastName: `Last${i}-${c}`,
             email: `contact${c}@${name.toLowerCase().replace(/\s/g, '')}.com`,
@@ -721,6 +753,7 @@ export class SeedStoryService {
         const opp = await this.prisma.opportunity.create({
           data: {
             accountId: account.id,
+            tenantId,
             name: `Opportunity ${o + 1}`,
             stage: stageSpec.stage,
             amount: 50000 + Math.floor(rand() * 100000),
@@ -737,6 +770,7 @@ export class SeedStoryService {
           [{ id: opp.id }],
           fillerContactIds.slice(0, numDealTeam),
           fillerRoles.slice(0, numDealTeam),
+          tenantId,
         );
         const oppFile = fakeFile(`Opportunity ${o + 1} - Notes.txt`, `Notes for Opportunity ${o + 1} at ${name}.\n\nStage: ${stageSpec.stage}. Some details.`);
         await this.attachmentsService.create('opportunity', opp.id, oppFile, user);
@@ -756,7 +790,7 @@ export class SeedStoryService {
           email: { subject: `Email ${a}`, body: 'Body', direction: 'outbound' },
           task: { title: `Task ${a}`, status: 'open' },
         };
-        await this.createActivityWithDate('account', account.id, type, payloads[type], createdAt);
+        await this.createActivityWithDate('account', account.id, type, payloads[type], createdAt, tenantId);
         activitiesCreated++;
       }
 

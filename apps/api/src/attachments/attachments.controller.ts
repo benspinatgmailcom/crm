@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags
 import type { Response } from 'express';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
+import { requireTenantId } from '../common/tenant.util';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -68,8 +69,10 @@ export class AttachmentsController {
   findAll(
     @Query('entityType') entityType: string,
     @Query('entityId') entityId: string,
+    @CurrentUser() user: User,
   ) {
-    return this.attachmentsService.findAll(entityType, entityId);
+    const tenantId = requireTenantId(user);
+    return this.attachmentsService.findAll(entityType, entityId, tenantId);
   }
 
   @Get(':id/download')
@@ -81,8 +84,10 @@ export class AttachmentsController {
     @Param('id') id: string,
     @Query('format') format: string | undefined,
     @Res() res: Response,
+    @CurrentUser() user: User,
   ) {
-    const { attachment, signedUrl, localFilePath } = await this.attachmentsService.getDownload(id);
+    const tenantId = requireTenantId(user);
+    const { attachment, signedUrl, localFilePath } = await this.attachmentsService.getDownload(id, tenantId);
 
     if (format === 'json') {
       if (signedUrl) {

@@ -2,9 +2,12 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Activity } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { requireTenantId } from '../common/tenant.util';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { ActivityService } from './activity.service';
+import type { User } from '@crm/db';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { QueryActivityDto } from './dto/query-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
@@ -24,8 +27,9 @@ export class ActivityController {
   })
   @ApiResponse({ status: 201, description: 'Activity created' })
   @ApiResponse({ status: 400, description: 'Validation error (entityType, entityId, type, or payload)' })
-  create(@Body() dto: CreateActivityDto): Promise<Activity> {
-    return this.activityService.create(dto);
+  create(@Body() dto: CreateActivityDto, @CurrentUser() user: User): Promise<Activity> {
+    const tenantId = requireTenantId(user);
+    return this.activityService.create(dto, tenantId);
   }
 
   @Get()
@@ -41,8 +45,9 @@ export class ActivityController {
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'pageSize', required: false, example: 20 })
   @ApiResponse({ status: 200, description: 'Paginated list: { data: Activity[], page, pageSize, total }' })
-  findAll(@Query() query: QueryActivityDto): Promise<PaginatedResult<Activity>> {
-    return this.activityService.findAll(query);
+  findAll(@Query() query: QueryActivityDto, @CurrentUser() user: User): Promise<PaginatedResult<Activity>> {
+    const tenantId = requireTenantId(user);
+    return this.activityService.findAll(query, tenantId);
   }
 
   @Get(':id')
@@ -50,8 +55,9 @@ export class ActivityController {
   @ApiOperation({ summary: 'Get activity by ID' })
   @ApiResponse({ status: 200, description: 'Activity found' })
   @ApiResponse({ status: 404, description: 'Activity not found' })
-  findOne(@Param('id') id: string): Promise<Activity> {
-    return this.activityService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User): Promise<Activity> {
+    const tenantId = requireTenantId(user);
+    return this.activityService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -59,8 +65,9 @@ export class ActivityController {
   @ApiOperation({ summary: 'Update activity' })
   @ApiResponse({ status: 200, description: 'Activity updated' })
   @ApiResponse({ status: 404, description: 'Activity not found' })
-  update(@Param('id') id: string, @Body() dto: UpdateActivityDto): Promise<Activity> {
-    return this.activityService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateActivityDto, @CurrentUser() user: User): Promise<Activity> {
+    const tenantId = requireTenantId(user);
+    return this.activityService.update(id, dto, tenantId);
   }
 
   @Delete(':id')
@@ -68,7 +75,8 @@ export class ActivityController {
   @ApiOperation({ summary: 'Delete activity' })
   @ApiResponse({ status: 204, description: 'Activity deleted' })
   @ApiResponse({ status: 404, description: 'Activity not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.activityService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: User): Promise<void> {
+    const tenantId = requireTenantId(user);
+    await this.activityService.remove(id, tenantId);
   }
 }

@@ -48,17 +48,18 @@ export class AiDealBriefService {
   async generateDealBrief(
     opportunityId: string,
     userId: string,
+    tenantId: string,
     options: { forceRefresh?: boolean; lookbackDays?: number },
   ): Promise<DealBriefResponse> {
     const forceRefresh = options?.forceRefresh ?? false;
     const lookbackDays = options?.lookbackDays ?? 30;
 
     if (!forceRefresh) {
-      const cached = await this.findCachedDealBrief(opportunityId);
+      const cached = await this.findCachedDealBrief(opportunityId, tenantId);
       if (cached) return cached;
     }
 
-    const bundle = await this.buildContextBundle(opportunityId, lookbackDays);
+    const bundle = await this.buildContextBundle(opportunityId, tenantId, lookbackDays);
     const promptContext = this.formatContextForPrompt(bundle);
 
     const systemPrompt = this.getDealBriefSystemPrompt();
@@ -79,6 +80,7 @@ export class AiDealBriefService {
 
     const generatedAt = new Date().toISOString();
     const activity = await this.activityService.createRaw({
+      tenantId,
       entityType: 'opportunity',
       entityId: opportunityId,
       type: DEAL_BRIEF_ACTIVITY_TYPE,
@@ -104,12 +106,14 @@ export class AiDealBriefService {
   /** Return cached brief only if created within the last 6 hours */
   private async findCachedDealBrief(
     opportunityId: string,
+    tenantId: string,
   ): Promise<DealBriefResponse | null> {
     const since = new Date();
     since.setHours(since.getHours() - CACHE_WINDOW_HOURS);
 
     const activity = await this.prisma.activity.findFirst({
       where: {
+        tenantId,
         entityType: 'opportunity',
         entityId: opportunityId,
         type: DEAL_BRIEF_ACTIVITY_TYPE,
@@ -141,6 +145,7 @@ export class AiDealBriefService {
 
   private async buildContextBundle(
     opportunityId: string,
+    tenantId: string,
     lookbackDays: number,
   ): Promise<DealBriefContextBundle> {
     const since = new Date();
@@ -148,8 +153,8 @@ export class AiDealBriefService {
 
     const sinceDate = since;
     const [opportunity, activities, activitiesTotal, attachments] = await Promise.all([
-      this.prisma.opportunity.findUnique({
-        where: { id: opportunityId },
+      this.prisma.opportunity.findFirst({
+        where: { id: opportunityId, tenantId },
         include: {
           account: { include: { contacts: true } },
           opportunityContacts: {
@@ -163,6 +168,7 @@ export class AiDealBriefService {
       }),
       this.prisma.activity.findMany({
         where: {
+          tenantId,
           entityType: 'opportunity',
           entityId: opportunityId,
           createdAt: { gte: sinceDate },
@@ -173,6 +179,7 @@ export class AiDealBriefService {
       }),
       this.prisma.activity.count({
         where: {
+          tenantId,
           entityType: 'opportunity',
           entityId: opportunityId,
           createdAt: { gte: sinceDate },
@@ -180,7 +187,7 @@ export class AiDealBriefService {
         },
       }),
       this.prisma.attachment.findMany({
-        where: { entityType: 'opportunity', entityId: opportunityId },
+        where: { tenantId, entityType: 'opportunity', entityId: opportunityId },
         orderBy: { createdAt: 'desc' },
       }),
     ]);

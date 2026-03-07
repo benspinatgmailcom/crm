@@ -63,7 +63,7 @@ describe('FollowUpService', () => {
         },
       ]);
 
-      const result = await service.listOpportunityFollowups('opp1');
+      const result = await service.listOpportunityFollowups('opp1', 'tenant-1');
 
       expect(result.suggestions).toHaveLength(1);
       expect(result.suggestions[0].id).toBe('s1');
@@ -78,7 +78,7 @@ describe('FollowUpService', () => {
         { id: 'e1', type: 'task_completed', metadata: { taskActivityId: 't1', status: 'COMPLETED' }, createdAt: new Date() },
       ]);
 
-      const result = await service.listOpportunityFollowups('opp1');
+      const result = await service.listOpportunityFollowups('opp1', 'tenant-1');
       expect(result.openTasks).toHaveLength(0);
     });
   });
@@ -105,7 +105,7 @@ describe('FollowUpService', () => {
         createdAt: new Date(),
       });
 
-      const result = await service.createTaskFromSuggestion('sug-1');
+      const result = await service.createTaskFromSuggestion('sug-1', 'tenant-1');
 
       expect(prisma.activity.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -126,7 +126,7 @@ describe('FollowUpService', () => {
 
     it('throws NotFoundException when suggestion not found', async () => {
       prisma.activity.findFirst.mockResolvedValue(null);
-      await expect(service.createTaskFromSuggestion('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.createTaskFromSuggestion('missing', 'tenant-1')).rejects.toThrow(NotFoundException);
     });
 
     it('throws BadRequestException when suggestion status is not SUGGESTED', async () => {
@@ -137,7 +137,7 @@ describe('FollowUpService', () => {
         metadata: { status: 'ACCEPTED' },
         createdAt: new Date(),
       });
-      await expect(service.createTaskFromSuggestion('sug-1')).rejects.toThrow(BadRequestException);
+      await expect(service.createTaskFromSuggestion('sug-1', 'tenant-1')).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -151,7 +151,7 @@ describe('FollowUpService', () => {
       });
       prisma.activity.create.mockResolvedValue({});
 
-      await service.completeTask('task-1');
+      await service.completeTask('task-1', 'tenant-1');
 
       expect(prisma.activity.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -166,7 +166,7 @@ describe('FollowUpService', () => {
 
     it('throws NotFoundException when task not found', async () => {
       prisma.activity.findFirst.mockResolvedValue(null);
-      await expect(service.completeTask('missing')).rejects.toThrow(NotFoundException);
+      await expect(service.completeTask('missing', 'tenant-1')).rejects.toThrow(NotFoundException);
     });
   });
 });

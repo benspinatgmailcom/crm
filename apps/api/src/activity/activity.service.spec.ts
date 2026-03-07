@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Activity } from '@crm/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkflowService } from '../workflow/workflow.service';
+import { OpportunityForecastService } from '../forecast-engine/opportunity-forecast.service';
 import { ActivityService } from './activity.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 
@@ -12,6 +13,7 @@ describe('ActivityService', () => {
 
   const createdActivity: Activity = {
     id: 'act-1',
+    tenantId: 'tenant-1',
     entityType: 'opportunity',
     entityId: 'opp-1',
     type: 'note',
@@ -41,6 +43,7 @@ describe('ActivityService', () => {
         ActivityService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: WorkflowService, useValue: mockWorkflow },
+        { provide: OpportunityForecastService, useValue: { recomputeForecast: jest.fn() } },
       ],
     }).compile();
 
@@ -62,10 +65,11 @@ describe('ActivityService', () => {
         payload: { text: 'Note text' },
       };
 
-      const result = await service.create(dto);
+      const result = await service.create(dto, 'tenant-1');
 
       expect(prisma.activity.create).toHaveBeenCalledWith({
         data: {
+          tenantId: 'tenant-1',
           entityType: dto.entityType,
           entityId: dto.entityId,
           type: dto.type,
@@ -76,6 +80,7 @@ describe('ActivityService', () => {
       expect(workflow.updateLastActivityAt).toHaveBeenCalledWith(
         'opp-1',
         createdActivity.createdAt,
+        'tenant-1',
       );
       expect(result).toEqual(createdActivity);
     });
@@ -93,7 +98,7 @@ describe('ActivityService', () => {
         entityId: 'contact-1',
       });
 
-      await service.create(dto);
+      await service.create(dto, 'tenant-1');
 
       expect(workflow.updateLastActivityAt).not.toHaveBeenCalled();
     });
@@ -102,6 +107,7 @@ describe('ActivityService', () => {
   describe('createRaw (opportunity activity)', () => {
     it('updates opportunity lastActivityAt when entityType is opportunity', async () => {
       const data = {
+        tenantId: 'tenant-1',
         entityType: 'opportunity',
         entityId: 'opp-2',
         type: 'stage_change',
@@ -113,11 +119,13 @@ describe('ActivityService', () => {
       expect(workflow.updateLastActivityAt).toHaveBeenCalledWith(
         'opp-2',
         createdActivity.createdAt,
+        'tenant-1',
       );
     });
 
     it('does not call workflow when entityType is not opportunity', async () => {
       await service.createRaw({
+        tenantId: 'tenant-1',
         entityType: 'account',
         entityId: 'acc-1',
         type: 'note',
@@ -129,6 +137,7 @@ describe('ActivityService', () => {
 
     it('does not call workflow for non-touch activity type (followup_draft_created)', async () => {
       await service.createRaw({
+        tenantId: 'tenant-1',
         entityType: 'opportunity',
         entityId: 'opp-1',
         type: 'followup_draft_created',

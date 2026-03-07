@@ -10,7 +10,7 @@ import { env } from "@/lib/env";
 const logoUrl = env.NEXT_PUBLIC_LOGO_URL || null;
 
 function LoginContent() {
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [showResetSuccess, setShowResetSuccess] = useState(false);
@@ -21,10 +21,10 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace("/accounts");
+    if (!isLoading && isAuthenticated && user) {
+      router.replace(user.role === "GLOBAL_ADMIN" ? "/platform" : "/accounts");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, user, router]);
 
   useEffect(() => {
     if (searchParams.get("reset") === "success") {

@@ -96,6 +96,37 @@ CRUD routes require JWT. Use Swagger "Authorize" with the access token.
 | `GET /attachments/:id/download` | Download (redirect to signed URL for S3, or stream for local) |
 | `DELETE /attachments/:id` | Delete attachment |
 
+### OpenAI API touch points
+
+All AI features use the **OpenAI API** via a single adapter. If `OPENAI_API_KEY` is not set, these features return 503 or an error; no requests are sent.
+
+**Configuration (API only)**
+
+- **`OPENAI_API_KEY`** (optional) — Set in `apps/api/.env`. Required for any AI feature.
+- **`OPENAI_MODEL`** (optional) — Model name; default `gpt-4o-mini`. Used for all calls.
+
+**Implementation**
+
+- **Adapter:** `apps/api/src/ai/adapter/openai.adapter.ts` — Uses the OpenAI Node SDK and the **Responses API** (`client.responses.create()`). All AI calls go through the abstract `AiAdapter`; the only concrete implementation is `OpenAiAdapter`.
+- **Registration:** `apps/api/src/ai/ai.module.ts` — Provides `AiAdapter` as `OpenAiAdapter`.
+
+**Where the API is called**
+
+| Touch point | Service / module | HTTP endpoint | Purpose |
+|-------------|------------------|---------------|---------|
+| **AI summary** | `AiService` (`apps/api/src/ai/ai.service.ts`) | `POST /ai/summary` | Builds entity + activity context, sends one chat request; creates `ai_summary` activity with summary text, bullets, risks, next actions, optional email draft. |
+| **Next best actions** | `AiService` | `POST /ai/next-actions` | Same context pattern; one chat request; creates `ai_recommendation` activity and returns structured actions (priority, title, why, type, etc.). |
+| **Draft email** | `AiService` | `POST /ai/draft-email` | Email-focused context; one chat request (plus optional retry if JSON invalid); creates `ai_email_draft` activity. `POST /ai/draft-email/:activityId/log` does **not** call OpenAI (logs draft as outbound email). |
+| **Deal brief** | `AiDealBriefService` (`apps/api/src/ai/ai-deal-brief.service.ts`) | `POST /ai/deal-brief/:opportunityId` | Builds opportunity/account/contacts/activities/attachments context; one chat request; caches result in `ai_deal_brief` activity (configurable lookback, force refresh). |
+| **Follow-up draft (from suggestion)** | `FollowUpDraftService` (`apps/api/src/followup-engine/draft/followup-draft.service.ts`) | `POST /followups/:suggestionId/draft` | Builds suggestion + opportunity context; one chat request (plus optional retry for JSON); creates `followup_draft_created` activity. |
+| **Follow-up draft (from task)** | `FollowUpDraftService` | `POST /tasks/:taskActivityId/draft` | Same as above, triggered from an open task instead of a suggestion. |
+
+**Summary**
+
+- **6 user-facing flows** call OpenAI (summary, next actions, draft email, deal brief, follow-up draft from suggestion, follow-up draft from task).
+- **Single abstraction:** all go through `AiAdapter.chat(messages)` → `OpenAiAdapter` → `openai.responses.create()` with `OPENAI_MODEL` and `OPENAI_API_KEY`.
+- **No OpenAI calls:** logging a draft email (`/ai/draft-email/:activityId/log`) and converting a recommendation to a task (`/ai/next-actions/:activityId/convert`) only read/write DB and activities.
+
 ## Scripts
 
 | Command       | Description                    |

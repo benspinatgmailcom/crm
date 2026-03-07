@@ -31,9 +31,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <ThemeProvider>
-          <AuthProviderWrapper>{children}</AuthProviderWrapper>
-        </ThemeProvider>
+        <AuthProviderWrapper>
+          <ThemeProvider>{children}</ThemeProvider>
+        </AuthProviderWrapper>
       </body>
     </html>
   );

@@ -2,9 +2,12 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Account } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { requireTenantId } from '../common/tenant.util';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { AccountService } from './account.service';
+import type { User } from '@crm/db';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { QueryAccountDto } from './dto/query-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
@@ -21,8 +24,9 @@ export class AccountController {
   @ApiResponse({ status: 201, description: 'Account created' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 409, description: 'Conflict' })
-  create(@Body() dto: CreateAccountDto): Promise<Account> {
-    return this.accountService.create(dto);
+  create(@Body() dto: CreateAccountDto, @CurrentUser() user: User): Promise<Account> {
+    const tenantId = requireTenantId(user);
+    return this.accountService.create(dto, tenantId);
   }
 
   @Get()
@@ -35,8 +39,9 @@ export class AccountController {
     status: 200,
     description: 'Returns { data, page, pageSize, total }',
   })
-  findAll(@Query() query: QueryAccountDto): Promise<PaginatedResult<Account>> {
-    return this.accountService.findAll(query);
+  findAll(@Query() query: QueryAccountDto, @CurrentUser() user: User): Promise<PaginatedResult<Account>> {
+    const tenantId = requireTenantId(user);
+    return this.accountService.findAll(query, tenantId);
   }
 
   @Get(':id')
@@ -44,8 +49,9 @@ export class AccountController {
   @ApiOperation({ summary: 'Get account by ID' })
   @ApiResponse({ status: 200, description: 'Account found' })
   @ApiResponse({ status: 404, description: 'Account not found' })
-  findOne(@Param('id') id: string): Promise<Account> {
-    return this.accountService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User): Promise<Account> {
+    const tenantId = requireTenantId(user);
+    return this.accountService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -54,8 +60,9 @@ export class AccountController {
   @ApiResponse({ status: 200, description: 'Account updated' })
   @ApiResponse({ status: 404, description: 'Account not found' })
   @ApiResponse({ status: 409, description: 'Conflict' })
-  update(@Param('id') id: string, @Body() dto: UpdateAccountDto): Promise<Account> {
-    return this.accountService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateAccountDto, @CurrentUser() user: User): Promise<Account> {
+    const tenantId = requireTenantId(user);
+    return this.accountService.update(id, dto, tenantId);
   }
 
   @Delete(':id')
@@ -63,7 +70,8 @@ export class AccountController {
   @ApiOperation({ summary: 'Delete account' })
   @ApiResponse({ status: 204, description: 'Account deleted' })
   @ApiResponse({ status: 404, description: 'Account not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.accountService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: User): Promise<void> {
+    const tenantId = requireTenantId(user);
+    await this.accountService.remove(id, tenantId);
   }
 }

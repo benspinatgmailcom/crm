@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Opportunity } from '@crm/db';
 import { PaginatedResult } from '../common/pagination.dto';
+import { requireTenantId } from '../common/tenant.util';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
@@ -69,24 +70,27 @@ export class OpportunityController {
     description: 'Query params: page (default 1), pageSize (default 20), accountId, stage, name (contains), sortBy (name|amount|createdAt|closeDate), sortDir (asc|desc)',
   })
   @ApiResponse({ status: 200, description: 'Returns { data, page, pageSize, total }' })
-  findAll(@Query() query: QueryOpportunityDto): Promise<PaginatedResult<Opportunity>> {
-    return this.opportunityService.findAll(query);
+  findAll(@Query() query: QueryOpportunityDto, @CurrentUser() user: User): Promise<PaginatedResult<Opportunity>> {
+    const tenantId = requireTenantId(user);
+    return this.opportunityService.findAll(query, tenantId);
   }
 
   @Get(':id/followups')
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
   @ApiOperation({ summary: 'List follow-up suggestions and open tasks for an opportunity' })
   @ApiResponse({ status: 200, description: 'Returns { suggestions, openTasks }' })
-  listFollowups(@Param('id') id: string) {
-    return this.followUpService.listOpportunityFollowups(id);
+  listFollowups(@Param('id') id: string, @CurrentUser() user: User) {
+    const tenantId = requireTenantId(user);
+    return this.followUpService.listOpportunityFollowups(id, tenantId);
   }
 
   @Get(':id/deal-team')
   @Roles(Role.ADMIN, Role.USER, Role.VIEWER)
   @ApiOperation({ summary: 'List deal team (buying team) for an opportunity' })
   @ApiResponse({ status: 200, description: 'Returns array of { contactId, role, contact }' })
-  getDealTeam(@Param('id') id: string) {
-    return this.opportunityService.getDealTeam(id);
+  getDealTeam(@Param('id') id: string, @CurrentUser() user: User) {
+    const tenantId = requireTenantId(user);
+    return this.opportunityService.getDealTeam(id, tenantId);
   }
 
   @Post(':id/deal-team')
@@ -96,8 +100,10 @@ export class OpportunityController {
   addDealTeamMember(
     @Param('id') id: string,
     @Body() dto: AddDealTeamMemberDto,
+    @CurrentUser() user: User,
   ) {
-    return this.opportunityService.addDealTeamMember(id, dto.contactId, dto.role);
+    const tenantId = requireTenantId(user);
+    return this.opportunityService.addDealTeamMember(id, dto.contactId, dto.role, tenantId);
   }
 
   @Patch(':id/deal-team/:contactId')
@@ -108,8 +114,10 @@ export class OpportunityController {
     @Param('id') id: string,
     @Param('contactId') contactId: string,
     @Body() dto: UpdateDealTeamMemberDto,
+    @CurrentUser() user: User,
   ) {
-    return this.opportunityService.updateDealTeamMemberRole(id, contactId, dto.role);
+    const tenantId = requireTenantId(user);
+    return this.opportunityService.updateDealTeamMemberRole(id, contactId, dto.role, tenantId);
   }
 
   @Delete(':id/deal-team/:contactId')
@@ -119,8 +127,10 @@ export class OpportunityController {
   async removeDealTeamMember(
     @Param('id') id: string,
     @Param('contactId') contactId: string,
+    @CurrentUser() user: User,
   ): Promise<void> {
-    await this.opportunityService.removeDealTeamMember(id, contactId);
+    const tenantId = requireTenantId(user);
+    await this.opportunityService.removeDealTeamMember(id, contactId, tenantId);
   }
 
   @Get(':id')
@@ -128,8 +138,9 @@ export class OpportunityController {
   @ApiOperation({ summary: 'Get opportunity by ID' })
   @ApiResponse({ status: 200, description: 'Opportunity found' })
   @ApiResponse({ status: 404, description: 'Opportunity not found' })
-  findOne(@Param('id') id: string): Promise<Opportunity> {
-    return this.opportunityService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: User): Promise<Opportunity> {
+    const tenantId = requireTenantId(user);
+    return this.opportunityService.findOne(id, tenantId);
   }
 
   @Patch(':id')
@@ -152,7 +163,8 @@ export class OpportunityController {
   @ApiOperation({ summary: 'Delete opportunity' })
   @ApiResponse({ status: 204, description: 'Opportunity deleted' })
   @ApiResponse({ status: 404, description: 'Opportunity not found' })
-  async remove(@Param('id') id: string): Promise<void> {
-    await this.opportunityService.remove(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: User): Promise<void> {
+    const tenantId = requireTenantId(user);
+    await this.opportunityService.remove(id, tenantId);
   }
 }

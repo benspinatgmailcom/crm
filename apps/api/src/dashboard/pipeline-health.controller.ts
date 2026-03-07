@@ -1,5 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { requireTenantId } from '../common/tenant.util';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -26,6 +27,7 @@ export class PipelineHealthController {
     @Query() query: PipelineHealthQueryDto,
     @CurrentUser() user: User,
   ): Promise<PipelineHealthResponse> {
-    return this.pipelineHealthService.getPipelineHealth(user, query);
+    const tenantId = requireTenantId(user);
+    return this.pipelineHealthService.getPipelineHealth(user, query, tenantId);
   }
 }
