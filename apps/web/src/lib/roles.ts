@@ -10,3 +10,7 @@ export function canWrite(role: string | undefined): boolean {
 export function isAdmin(role: string | undefined): boolean {
   return role === "ADMIN";
 }
+
+export function isGlobalAdmin(role: string | undefined): boolean {
+  return role === "GLOBAL_ADMIN";
+}

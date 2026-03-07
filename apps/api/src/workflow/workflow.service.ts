@@ -10,18 +10,18 @@ export class WorkflowService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Set Opportunity.lastActivityAt to createdAt only if createdAt is newer
-   * (or lastActivityAt is null). Idempotent; minimal write.
+   * Set Opportunity.lastActivityAt to createdAt only if createdAt is newer.
+   * Tenant-scoped; no-op if opportunity not in tenant.
    */
-  async updateLastActivityAt(opportunityId: string, createdAt: Date): Promise<void> {
-    const opp = await this.prisma.opportunity.findUnique({
-      where: { id: opportunityId },
+  async updateLastActivityAt(opportunityId: string, createdAt: Date, tenantId: string): Promise<void> {
+    const opp = await this.prisma.opportunity.findFirst({
+      where: { id: opportunityId, tenantId },
       select: { lastActivityAt: true },
     });
     if (!opp) return;
     if (opp.lastActivityAt != null && createdAt <= opp.lastActivityAt) return;
-    await this.prisma.opportunity.update({
-      where: { id: opportunityId },
+    await this.prisma.opportunity.updateMany({
+      where: { id: opportunityId, tenantId },
       data: { lastActivityAt: createdAt },
     });
   }

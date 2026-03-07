@@ -90,7 +90,9 @@ export class AttachmentsService implements OnModuleInit {
       throw new BadRequestException('No file provided');
     }
 
-    await this.validateEntityExists(entityType, entityId);
+    const tenantId = user.tenantId;
+    if (tenantId == null) throw new BadRequestException('Tenant context required');
+    await this.validateEntityExists(entityType, entityId, tenantId);
 
     const id = crypto.randomUUID();
     const safeName = this.sanitizeFileName(file.originalname || 'file');
@@ -116,6 +118,7 @@ export class AttachmentsService implements OnModuleInit {
     const attachment = await this.prisma.attachment.create({
       data: {
         id,
+        tenantId,
         entityType,
         entityId,
         fileName: file.originalname || 'file',
@@ -130,6 +133,7 @@ export class AttachmentsService implements OnModuleInit {
     });
 
     await this.activityService.createRaw({
+      tenantId,
       entityType,
       entityId,
       type: 'file_uploaded',
@@ -144,21 +148,21 @@ export class AttachmentsService implements OnModuleInit {
     return attachment;
   }
 
-  async findAll(entityType: string, entityId: string): Promise<Attachment[]> {
+  async findAll(entityType: string, entityId: string, tenantId: string): Promise<Attachment[]> {
     return this.prisma.attachment.findMany({
-      where: { entityType, entityId },
+      where: { tenantId, entityType, entityId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findOne(id: string): Promise<Attachment> {
-    const a = await this.prisma.attachment.findUnique({ where: { id } });
+  async findOne(id: string, tenantId: string): Promise<Attachment> {
+    const a = await this.prisma.attachment.findFirst({ where: { id, tenantId } });
     if (!a) throw new NotFoundException(`Attachment ${id} not found`);
     return a;
   }
 
-  async getDownload(id: string): Promise<DownloadResult> {
-    const attachment = await this.findOne(id);
+  async getDownload(id: string, tenantId: string): Promise<DownloadResult> {
+    const attachment = await this.findOne(id, tenantId);
     const driver = attachment.storageDriver ?? (attachment.bucket ? 's3' : 'local');
     const provider = this.getProvider(driver);
 
@@ -182,12 +186,15 @@ export class AttachmentsService implements OnModuleInit {
   }
 
   async remove(id: string, user: User): Promise<void> {
-    const attachment = await this.findOne(id);
+    const tenantId = user.tenantId;
+    if (tenantId == null) throw new BadRequestException('Tenant context required');
+    const attachment = await this.findOne(id, tenantId);
     const driver = attachment.storageDriver ?? (attachment.bucket ? 's3' : 'local');
     const provider = this.getProvider(driver);
     await provider.deleteObject({ key: attachment.storageKey });
-    await this.prisma.attachment.delete({ where: { id } });
+    await this.prisma.attachment.deleteMany({ where: { id, tenantId } });
     await this.activityService.createRaw({
+      tenantId,
       entityType: attachment.entityType,
       entityId: attachment.entityId,
       type: 'file_deleted',
@@ -201,11 +208,12 @@ export class AttachmentsService implements OnModuleInit {
   async getExtractedTextForEntity(
     entityType: string,
     entityId: string,
+    tenantId: string,
     limit: number = 2,
     maxChars: number = 8000,
   ): Promise<string> {
     const attachments = await this.prisma.attachment.findMany({
-      where: { entityType, entityId },
+      where: { tenantId, entityType, entityId },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -227,20 +235,21 @@ export class AttachmentsService implements OnModuleInit {
   private async validateEntityExists(
     entityType: string,
     entityId: string,
+    tenantId: string,
   ): Promise<void> {
     let exists = false;
     switch (entityType) {
       case 'account':
-        exists = !!(await this.prisma.account.findUnique({ where: { id: entityId } }));
+        exists = !!(await this.prisma.account.findFirst({ where: { id: entityId, tenantId } }));
         break;
       case 'contact':
-        exists = !!(await this.prisma.contact.findUnique({ where: { id: entityId } }));
+        exists = !!(await this.prisma.contact.findFirst({ where: { id: entityId, tenantId } }));
         break;
       case 'lead':
-        exists = !!(await this.prisma.lead.findUnique({ where: { id: entityId } }));
+        exists = !!(await this.prisma.lead.findFirst({ where: { id: entityId, tenantId } }));
         break;
       case 'opportunity':
-        exists = !!(await this.prisma.opportunity.findUnique({ where: { id: entityId } }));
+        exists = !!(await this.prisma.opportunity.findFirst({ where: { id: entityId, tenantId } }));
         break;
       default:
         return;

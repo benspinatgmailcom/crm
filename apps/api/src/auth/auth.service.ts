@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { User } from '@crm/db';
+import { TenantStatus, User } from '@crm/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { Role } from './constants';
@@ -21,6 +21,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   role: string;
+  tenantId: string | null;
   type: 'access' | 'refresh';
 }
 
@@ -43,23 +44,23 @@ export class AuthService {
   async register(dto: RegisterDto, requestingAdmin?: User): Promise<AuthTokens & { user: User }> {
     const userCount = await this.prisma.user.count();
 
-    // First user bootstrap: create as ADMIN
+    // First user bootstrap: create as ADMIN (tenantId null for platform admin)
     if (userCount === 0) {
-      const user = await this.createUser(dto.email, dto.password, Role.ADMIN);
+      const user = await this.createUser(dto.email, dto.password, Role.ADMIN, null);
       return this.loginUser(user);
     }
 
-    // Otherwise require ADMIN
+    // Otherwise require ADMIN; new user gets same tenant as requesting admin (derived from JWT, not body)
     if (!requestingAdmin || requestingAdmin.role !== Role.ADMIN) {
       throw new ForbiddenException('Only admins can register new users');
     }
-
-    const user = await this.createUser(dto.email, dto.password, dto.role ?? Role.USER);
+    const tenantId = requestingAdmin.tenantId ?? null;
+    const user = await this.createUser(dto.email, dto.password, dto.role ?? Role.USER, tenantId);
     return this.loginUser(user);
   }
 
   async login(dto: LoginDto): Promise<AuthTokens & { user: User }> {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.user.findFirst({ where: { email: dto.email } });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -73,12 +74,29 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // GLOBAL_ADMIN with tenantId null can always log in. Others must belong to an ACTIVE tenant.
+    if (user.tenantId != null) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { status: true },
+      });
+      if (!tenant || tenant.status !== TenantStatus.ACTIVE) {
+        throw new ForbiddenException(
+          tenant?.status === TenantStatus.SUSPENDED
+            ? 'Tenant is suspended. Contact your administrator.'
+            : tenant?.status === TenantStatus.DELETED
+              ? 'Tenant is no longer active.'
+              : 'Tenant is not active. Contact your administrator.',
+        );
+      }
+    }
+
     return this.loginUser(user);
   }
 
   async refresh(
     refreshToken: string,
-  ): Promise<AuthTokens & { user: { id: string; email: string; role: string } }> {
+  ): Promise<AuthTokens & { user: { id: string; email: string; role: string; tenantId: string | null } }> {
     const payload = await this.verifyRefreshToken(refreshToken);
     const tokenHash = this.hashToken(refreshToken);
 
@@ -95,7 +113,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    // Revoke old token (optional: allow multiple refresh tokens)
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
       data: { revokedAt: new Date() },
@@ -103,15 +120,28 @@ export class AuthService {
 
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: payload.sub },
-      select: { id: true, email: true, role: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true, passwordHash: true },
+      select: { id: true, email: true, role: true, tenantId: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true, passwordHash: true },
     });
 
     if (user.isActive === false) {
       throw new UnauthorizedException('Account is deactivated');
     }
 
+    if (user.tenantId != null) {
+      const tenant = await this.prisma.tenant.findUnique({
+        where: { id: user.tenantId },
+        select: { status: true },
+      });
+      if (!tenant || tenant.status !== TenantStatus.ACTIVE) {
+        throw new UnauthorizedException('Tenant is not active');
+      }
+    }
+
     const tokens = await this.issueTokens(user as User);
-    return { ...tokens, user };
+    return {
+      ...tokens,
+      user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId },
+    };
   }
 
   async logout(refreshToken: string): Promise<void> {
@@ -125,25 +155,77 @@ export class AuthService {
     });
   }
 
-  async me(userId: string): Promise<Omit<User, 'passwordHash'>> {
-    const user = await this.prisma.user.findUnique({
+  /** Returns current user and tenant branding for authenticated context. */
+  async me(userId: string): Promise<{
+    user: Omit<User, 'passwordHash'>;
+    tenant: {
+      id: string;
+      name: string;
+      slug: string;
+      displayName: string | null;
+      logoUrl: string | null;
+      faviconUrl: string | null;
+      primaryColor: string | null;
+      accentColor: string | null;
+      themeMode: string | null;
+    } | null;
+  }> {
+    const row = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, role: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        tenantId: true,
+        isActive: true,
+        mustChangePassword: true,
+        createdAt: true,
+        updatedAt: true,
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            displayName: true,
+            logoUrl: true,
+            faviconUrl: true,
+            primaryColor: true,
+            accentColor: true,
+            themeMode: true,
+          },
+        },
+      },
     });
-    if (!user) throw new UnauthorizedException('User not found');
-    return user;
+    if (!row) throw new UnauthorizedException('User not found');
+    const { tenant, ...userFields } = row;
+    const user = userFields as Omit<User, 'passwordHash'>;
+    const tenantBranding = tenant
+      ? {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          displayName: tenant.displayName,
+          logoUrl: tenant.logoUrl,
+          faviconUrl: tenant.faviconUrl,
+          primaryColor: tenant.primaryColor,
+          accentColor: tenant.accentColor,
+          themeMode: tenant.themeMode,
+        }
+      : null;
+    return { user, tenant: tenantBranding };
   }
 
   async requestPasswordReset(email: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findFirst({ where: { email } });
     if (!user) return;
 
     const rawToken = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
+    if (user.tenantId == null) return;
     await this.prisma.passwordResetToken.create({
-      data: { userId: user.id, tokenHash, expiresAt },
+      data: { userId: user.id, tenantId: user.tenantId, tokenHash, expiresAt },
     });
 
     try {
@@ -195,20 +277,30 @@ export class AuthService {
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash, mustChangePassword: false },
-      select: { id: true, email: true, role: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true },
+      select: { id: true, tenantId: true, email: true, role: true, isActive: true, mustChangePassword: true, createdAt: true, updatedAt: true },
     });
     return updated;
   }
 
-  private async createUser(email: string, password: string, role: Role): Promise<User> {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
+  private async createUser(
+    email: string,
+    password: string,
+    role: Role,
+    tenantId: string | null,
+  ): Promise<User> {
+    const existing = await this.prisma.user.findFirst({
+      where: {
+        email,
+        tenantId: tenantId == null ? { equals: null } : tenantId,
+      },
+    });
     if (existing) {
       throw new ConflictException('User with this email already exists');
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
     return this.prisma.user.create({
-      data: { email, passwordHash, role },
+      data: { email, passwordHash, role, ...(tenantId != null && { tenantId }) },
     });
   }
 
@@ -217,19 +309,13 @@ export class AuthService {
     const tokenHash = this.hashToken(tokens.refreshToken);
     const expiresAt = new Date(Date.now() + this.parseTtl(this.jwtConfig.refreshTtl) * 1000);
 
-    await this.prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-      },
-    });
+    if (user.tenantId != null) {
+      await this.prisma.refreshToken.create({
+        data: { tenantId: user.tenantId, userId: user.id, tokenHash, expiresAt },
+      });
+    }
 
-    const { passwordHash: _, ...safeUser } = user;
-    return {
-      ...tokens,
-      user: user,
-    };
+    return { ...tokens, user };
   }
 
   private async issueTokens(user: User): Promise<AuthTokens> {
@@ -237,22 +323,17 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      tenantId: user.tenantId ?? null,
     };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
         { ...payload, type: 'access' },
-        {
-          secret: this.jwtConfig.accessSecret,
-          expiresIn: this.jwtConfig.accessTtl,
-        },
+        { secret: this.jwtConfig.accessSecret, expiresIn: this.jwtConfig.accessTtl },
       ),
       this.jwtService.signAsync(
         { ...payload, type: 'refresh' },
-        {
-          secret: this.jwtConfig.refreshSecret,
-          expiresIn: this.jwtConfig.refreshTtl,
-        },
+        { secret: this.jwtConfig.refreshSecret, expiresIn: this.jwtConfig.refreshTtl },
       ),
     ]);
 

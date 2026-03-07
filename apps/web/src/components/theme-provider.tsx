@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useAuth } from "@/context/auth-context";
 import { env } from "@/lib/env";
 
 const DEFAULT_ACCENT_1 = "37 99 235";
@@ -22,14 +23,41 @@ function hexToRgbChannels(hex: string): string | null {
   return `${r} ${g} ${b}`;
 }
 
+function resolveRgb(value: string | null | undefined, envValue: string, defaultRgb: string): string {
+  const raw = value ?? envValue;
+  if (!raw) return defaultRgb;
+  return raw.startsWith("#") ? (hexToRgbChannels(raw) ?? defaultRgb) : raw;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const { tenant } = useAuth();
+
   useEffect(() => {
-    const raw1 = env.NEXT_PUBLIC_ACCENT_1;
-    const raw2 = env.NEXT_PUBLIC_ACCENT_2;
-    const accent1 = raw1.startsWith("#") ? (hexToRgbChannels(raw1) ?? DEFAULT_ACCENT_1) : (raw1 || DEFAULT_ACCENT_1);
-    const accent2 = raw2.startsWith("#") ? (hexToRgbChannels(raw2) ?? DEFAULT_ACCENT_2) : (raw2 || DEFAULT_ACCENT_2);
+    const accent1 = resolveRgb(
+      tenant?.primaryColor ?? undefined,
+      env.NEXT_PUBLIC_ACCENT_1,
+      DEFAULT_ACCENT_1
+    );
+    const accent2 = resolveRgb(
+      tenant?.accentColor ?? undefined,
+      env.NEXT_PUBLIC_ACCENT_2,
+      DEFAULT_ACCENT_2
+    );
     document.documentElement.style.setProperty("--accent-1", accent1);
     document.documentElement.style.setProperty("--accent-2", accent2);
-  }, []);
+  }, [tenant?.primaryColor, tenant?.accentColor]);
+
+  useEffect(() => {
+    const themeColor = (tenant?.primaryColor ?? tenant?.accentColor ?? env.NEXT_PUBLIC_ACCENT_1);
+    const hex = themeColor.startsWith("#") ? themeColor : "#2563eb";
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "theme-color";
+      document.head.appendChild(meta);
+    }
+    meta.content = hex;
+  }, [tenant?.primaryColor, tenant?.accentColor]);
+
   return <>{children}</>;
 }

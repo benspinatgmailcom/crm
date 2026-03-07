@@ -13,6 +13,7 @@
     "db:seed": "prisma db seed"
   },
   "dependencies": {
+    "@crm/shared": "workspace:*",
     "@prisma/client": "^6.19.2",
     "bcrypt": "^5.1.1"
   },

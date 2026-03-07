@@ -7,12 +7,13 @@ import { AiDealBriefService } from './ai-deal-brief.service';
 
 const OPP_ID = 'opp-1';
 const USER_ID = 'user-1';
+const TENANT_ID = 'tenant-1';
 const CACHED_ACTIVITY_ID = 'act-cached';
 const NEW_ACTIVITY_ID = 'act-new';
 
 describe('AiDealBriefService', () => {
   let service: AiDealBriefService;
-  let prisma: { activity: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock }; opportunity: { findUnique: jest.Mock }; attachment: { findMany: jest.Mock } };
+  let prisma: { activity: { findFirst: jest.Mock; findMany: jest.Mock; count: jest.Mock }; opportunity: { findFirst: jest.Mock }; attachment: { findMany: jest.Mock } };
   let activityService: { createRaw: jest.Mock };
   let aiAdapter: { chat: jest.Mock };
 
@@ -44,7 +45,7 @@ describe('AiDealBriefService', () => {
         count: jest.fn().mockResolvedValue(0),
       },
       opportunity: {
-        findUnique: jest.fn().mockResolvedValue(mockOpportunity),
+        findFirst: jest.fn().mockResolvedValue(mockOpportunity),
       },
       attachment: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -93,7 +94,7 @@ describe('AiDealBriefService', () => {
         createdAt: cachedCreatedAt,
       });
 
-      const result = await service.generateDealBrief(OPP_ID, USER_ID, {
+      const result = await service.generateDealBrief(OPP_ID, USER_ID, TENANT_ID, {
         forceRefresh: false,
         lookbackDays: 30,
       });
@@ -111,7 +112,7 @@ describe('AiDealBriefService', () => {
     it('does NOT return cache when activity is older than 6 hours', async () => {
       (prisma.activity.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await service.generateDealBrief(OPP_ID, USER_ID, { forceRefresh: false });
+      await service.generateDealBrief(OPP_ID, USER_ID, TENANT_ID, { forceRefresh: false });
 
       expect(aiAdapter.chat).toHaveBeenCalled();
       expect(activityService.createRaw).toHaveBeenCalled();
@@ -130,7 +131,7 @@ describe('AiDealBriefService', () => {
         createdAt: new Date(),
       });
 
-      const result = await service.generateDealBrief(OPP_ID, USER_ID, {
+      const result = await service.generateDealBrief(OPP_ID, USER_ID, TENANT_ID, {
         forceRefresh: true,
         lookbackDays: 14,
       });
@@ -160,11 +161,11 @@ describe('AiDealBriefService', () => {
     });
 
     it('throws NotFoundException when opportunity does not exist', async () => {
-      (prisma.opportunity.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.opportunity.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.activity.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.generateDealBrief(OPP_ID, USER_ID, { forceRefresh: true }),
+        service.generateDealBrief(OPP_ID, USER_ID, TENANT_ID, { forceRefresh: true }),
       ).rejects.toThrow(NotFoundException);
       expect(aiAdapter.chat).not.toHaveBeenCalled();
     });

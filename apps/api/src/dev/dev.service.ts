@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { TenantStatus } from '@crm/db';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -14,7 +15,16 @@ export class DevService {
     await this.prisma.contact.deleteMany();
     await this.prisma.lead.deleteMany();
     await this.prisma.account.deleteMany();
-    await this.prisma.user.deleteMany();
+    await this.prisma.user.deleteMany({ where: { tenantId: { not: null } } });
+    await this.prisma.tenant.deleteMany();
+
+    const devTenant = await this.prisma.tenant.create({
+      data: {
+        name: 'Dev Tenant',
+        slug: 'dev',
+        status: TenantStatus.ACTIVE,
+      },
+    });
 
     const passwordHash = await bcrypt.hash('Admin123!', 12);
     const adminUser = await this.prisma.user.create({
@@ -22,6 +32,7 @@ export class DevService {
         email: 'admin@example.com',
         passwordHash,
         role: 'ADMIN',
+        tenantId: devTenant.id,
       },
     });
 
@@ -30,6 +41,7 @@ export class DevService {
         name: 'Acme Corp',
         industry: 'Technology',
         website: 'https://acme.com',
+        tenantId: devTenant.id,
       },
     });
 
@@ -38,6 +50,7 @@ export class DevService {
         name: 'Globex Inc',
         industry: 'Manufacturing',
         website: 'https://globex.com',
+        tenantId: devTenant.id,
       },
     });
 
@@ -45,6 +58,7 @@ export class DevService {
       this.prisma.contact.create({
         data: {
           accountId: account1.id,
+          tenantId: devTenant.id,
           firstName: 'John',
           lastName: 'Doe',
           email: 'john@acme.com',
@@ -54,6 +68,7 @@ export class DevService {
       this.prisma.contact.create({
         data: {
           accountId: account1.id,
+          tenantId: devTenant.id,
           firstName: 'Jane',
           lastName: 'Smith',
           email: 'jane@acme.com',
@@ -69,6 +84,7 @@ export class DevService {
           company: 'StartupXYZ',
           status: 'new',
           source: 'website',
+          tenantId: devTenant.id,
         },
       }),
       this.prisma.lead.create({
@@ -78,6 +94,7 @@ export class DevService {
           company: 'AnotherCo',
           status: 'qualified',
           source: 'referral',
+          tenantId: devTenant.id,
         },
       }),
     ]);
@@ -86,6 +103,7 @@ export class DevService {
       this.prisma.opportunity.create({
         data: {
           accountId: account1.id,
+          tenantId: devTenant.id,
           name: 'Enterprise License',
           amount: 50000,
           stage: 'proposal',
@@ -96,6 +114,7 @@ export class DevService {
       this.prisma.opportunity.create({
         data: {
           accountId: account2.id,
+          tenantId: devTenant.id,
           name: 'Consulting Engagement',
           amount: 25000,
           stage: 'discovery',
@@ -112,6 +131,7 @@ export class DevService {
           entityId: account1.id,
           type: 'call',
           payload: { subject: 'Intro call', duration: 30 },
+          tenantId: devTenant.id,
         },
       }),
       this.prisma.activity.create({
@@ -120,6 +140,7 @@ export class DevService {
           entityId: contact1.id,
           type: 'email',
           payload: { subject: 'Follow-up', body: 'Thanks for the meeting' },
+          tenantId: devTenant.id,
         },
       }),
       this.prisma.activity.create({
@@ -128,11 +149,13 @@ export class DevService {
           entityId: opp1.id,
           type: 'meeting',
           payload: { subject: 'Demo', attendees: 3 },
+          tenantId: devTenant.id,
         },
       }),
     ]);
 
     const counts = {
+      tenants: 1,
       users: 1,
       accounts: 2,
       contacts: 2,

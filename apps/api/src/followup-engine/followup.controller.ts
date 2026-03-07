@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { requireTenantId } from '../common/tenant.util';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -30,6 +31,7 @@ export class FollowUpController {
     @Query() dto: ListFollowupsDto,
     @CurrentUser() user: User,
   ): Promise<{ items: Array<{ kind: 'suggestion' | 'openTask'; id: string; opportunityId: string; opportunityName: string; ownerId: string | null; ownerEmail: string | null; title: string; description?: string; dueAt: string; createdAt: string; snoozedUntil?: string; severity?: string }> }> {
+    const tenantId = requireTenantId(user);
     const userId = (user as { id?: string }).id;
     if (!userId) throw new Error('User not found');
     const isAdmin = (user as { role?: string }).role === 'ADMIN';
@@ -38,15 +40,17 @@ export class FollowUpController {
       dto.opportunityId,
       userId,
       isAdmin,
+      tenantId,
     );
   }
 
   @Post('followups/generate')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Manually run follow-up suggestion generation (admin only)' })
+  @ApiOperation({ summary: 'Manually run follow-up suggestion generation (admin only). Tenant-scoped.' })
   @ApiResponse({ status: 201, description: 'Returns { created, skipped, errors }' })
-  async runGenerate(): Promise<{ created: number; skipped: number; errors: number }> {
-    return this.followUpService.generateSuggestionsForOpenOpportunities();
+  async runGenerate(@CurrentUser() user: User): Promise<{ created: number; skipped: number; errors: number }> {
+    const tenantId = requireTenantId(user);
+    return this.followUpService.generateSuggestionsForOpenOpportunities(tenantId);
   }
 
   @Post('followups/:suggestionId/draft')
@@ -57,8 +61,10 @@ export class FollowUpController {
   createDraftFromSuggestion(
     @Param('suggestionId') suggestionId: string,
     @Body() dto: CreateDraftDto,
+    @CurrentUser() user: User,
   ) {
-    return this.draftService.generateDraftFromSuggestion(suggestionId, dto);
+    const tenantId = requireTenantId(user);
+    return this.draftService.generateDraftFromSuggestion(suggestionId, dto, tenantId);
   }
 
   @Post('followups/:suggestionId/create-task')
@@ -67,8 +73,9 @@ export class FollowUpController {
   @ApiResponse({ status: 201, description: 'Task created' })
   @ApiResponse({ status: 400, description: 'Suggestion not in SUGGESTED status' })
   @ApiResponse({ status: 404, description: 'Suggestion not found' })
-  createTaskFromSuggestion(@Param('suggestionId') suggestionId: string) {
-    return this.followUpService.createTaskFromSuggestion(suggestionId);
+  createTaskFromSuggestion(@Param('suggestionId') suggestionId: string, @CurrentUser() user: User) {
+    const tenantId = requireTenantId(user);
+    return this.followUpService.createTaskFromSuggestion(suggestionId, tenantId);
   }
 
   @Post('tasks/:taskActivityId/draft')
@@ -79,8 +86,10 @@ export class FollowUpController {
   createDraftFromTask(
     @Param('taskActivityId') taskActivityId: string,
     @Body() dto: CreateDraftDto,
+    @CurrentUser() user: User,
   ) {
-    return this.draftService.generateDraftFromTask(taskActivityId, dto);
+    const tenantId = requireTenantId(user);
+    return this.draftService.generateDraftFromTask(taskActivityId, dto, tenantId);
   }
 
   @Post('tasks/:taskActivityId/complete')
@@ -89,8 +98,9 @@ export class FollowUpController {
   @ApiResponse({ status: 201, description: 'Task completed' })
   @ApiResponse({ status: 400, description: 'Task not open' })
   @ApiResponse({ status: 404, description: 'Task not found' })
-  async completeTask(@Param('taskActivityId') taskActivityId: string): Promise<{ ok: true }> {
-    await this.followUpService.completeTask(taskActivityId);
+  async completeTask(@Param('taskActivityId') taskActivityId: string, @CurrentUser() user: User): Promise<{ ok: true }> {
+    const tenantId = requireTenantId(user);
+    await this.followUpService.completeTask(taskActivityId, tenantId);
     return { ok: true };
   }
 
@@ -100,8 +110,9 @@ export class FollowUpController {
   @ApiResponse({ status: 201, description: 'Task dismissed' })
   @ApiResponse({ status: 400, description: 'Task not open' })
   @ApiResponse({ status: 404, description: 'Task not found' })
-  async dismissTask(@Param('taskActivityId') taskActivityId: string): Promise<{ ok: true }> {
-    await this.followUpService.dismissTask(taskActivityId);
+  async dismissTask(@Param('taskActivityId') taskActivityId: string, @CurrentUser() user: User): Promise<{ ok: true }> {
+    const tenantId = requireTenantId(user);
+    await this.followUpService.dismissTask(taskActivityId, tenantId);
     return { ok: true };
   }
 
@@ -114,8 +125,10 @@ export class FollowUpController {
   async snoozeTask(
     @Param('taskActivityId') taskActivityId: string,
     @Body() dto: SnoozeTaskDto,
+    @CurrentUser() user: User,
   ): Promise<{ ok: true }> {
-    await this.followUpService.snoozeTask(taskActivityId, new Date(dto.until));
+    const tenantId = requireTenantId(user);
+    await this.followUpService.snoozeTask(taskActivityId, new Date(dto.until), tenantId);
     return { ok: true };
   }
 
@@ -128,8 +141,10 @@ export class FollowUpController {
   async markDraftSent(
     @Param('draftActivityId') draftActivityId: string,
     @Body() dto: MarkDraftSentDto,
+    @CurrentUser() user: User,
   ): Promise<{ ok: true }> {
-    await this.draftService.markDraftSent(draftActivityId, { channel: dto.channel, notes: dto.notes });
+    const tenantId = requireTenantId(user);
+    await this.draftService.markDraftSent(draftActivityId, { channel: dto.channel, notes: dto.notes }, tenantId);
     return { ok: true };
   }
 }

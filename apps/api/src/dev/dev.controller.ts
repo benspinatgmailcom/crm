@@ -1,5 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { User } from '@crm/db';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
 import { DevService } from './dev.service';
@@ -8,6 +10,7 @@ import { SeedStoryDto } from './dto/seed-story.dto';
 
 @ApiTags('Dev')
 @Controller('dev')
+@ApiBearerAuth()
 export class DevController {
   constructor(
     private readonly devService: DevService,
@@ -25,10 +28,13 @@ export class DevController {
 
   @Post('seed-story')
   @Roles(Role.ADMIN)
-  @ApiOperation({ summary: 'Seed story-based demo data (ADMIN only)' })
+  @ApiOperation({ summary: 'Seed story-based demo data for the current tenant (ADMIN only)' })
   @ApiResponse({ status: 201, description: 'Story seed completed' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  async seedStory(@Body() dto: SeedStoryDto): Promise<SeedStoryResult> {
-    return this.seedStoryService.seedStory(dto);
+  async seedStory(
+    @Body() dto: SeedStoryDto,
+    @CurrentUser() user: User,
+  ): Promise<SeedStoryResult> {
+    return this.seedStoryService.seedStory(dto, user);
   }
 }

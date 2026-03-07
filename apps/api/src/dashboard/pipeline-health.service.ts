@@ -133,6 +133,7 @@ export class PipelineHealthService {
   async getPipelineHealth(
     currentUser: User,
     query: PipelineHealthQueryDto,
+    tenantId: string,
   ): Promise<PipelineHealthResponse> {
     const isAdmin = currentUser.role === Role.ADMIN;
     let ownerParam = (query.owner ?? (isAdmin ? 'all' : 'me')).toLowerCase();
@@ -166,6 +167,7 @@ export class PipelineHealthService {
     const stageList = stagesFilter.length > 0 ? stagesFilter : ([...OPEN_STAGES] as string[]);
     const opportunities = await this.prisma.opportunity.findMany({
       where: {
+        tenantId,
         ...ownerWhere,
         stage: { in: stageList },
       },
@@ -412,6 +414,7 @@ export class PipelineHealthService {
       queueIds.length > 0
         ? await this.prisma.activity.findMany({
             where: {
+              tenantId,
               entityType: 'opportunity',
               entityId: { in: queueIds },
               type: { in: [...ACTIVITY_TYPES_FOLLOWUP] },

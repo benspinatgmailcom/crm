@@ -7,6 +7,7 @@
 const ACCESS_TOKEN_KEY = "crm_access_token";
 const REFRESH_TOKEN_KEY = "crm_refresh_token";
 const USER_KEY = "crm_user";
+const TENANT_KEY = "crm_tenant";
 
 let accessTokenMemory: string | null = null;
 
@@ -26,19 +27,40 @@ export interface StoredUser {
   id: string;
   email: string;
   role: string;
+  tenantId?: string | null;
   mustChangePassword?: boolean;
+}
+
+export interface TenantBranding {
+  id: string;
+  name: string;
+  slug: string;
+  displayName: string | null;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  themeMode: string | null;
 }
 
 export function setTokens(
   accessToken: string,
   refreshToken: string,
-  user: StoredUser
+  user: StoredUser,
+  tenant?: TenantBranding | null
 ): void {
   if (typeof window === "undefined") return;
   accessTokenMemory = accessToken;
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (tenant !== undefined) {
+    if (tenant != null) {
+      localStorage.setItem(TENANT_KEY, JSON.stringify(tenant));
+    } else {
+      localStorage.removeItem(TENANT_KEY);
+    }
+  }
 }
 
 export function updateStoredUser(updates: Partial<StoredUser>): void {
@@ -49,12 +71,33 @@ export function updateStoredUser(updates: Partial<StoredUser>): void {
   localStorage.setItem(USER_KEY, JSON.stringify(updated));
 }
 
+export function getStoredTenant(): TenantBranding | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(TENANT_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as TenantBranding;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredTenant(tenant: TenantBranding | null): void {
+  if (typeof window === "undefined") return;
+  if (tenant != null) {
+    localStorage.setItem(TENANT_KEY, JSON.stringify(tenant));
+  } else {
+    localStorage.removeItem(TENANT_KEY);
+  }
+}
+
 export function clearTokens(): void {
   if (typeof window === "undefined") return;
   accessTokenMemory = null;
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TENANT_KEY);
 }
 
 export function getStoredUser(): StoredUser | null {

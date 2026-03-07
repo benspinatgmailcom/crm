@@ -73,7 +73,7 @@ describe('FollowUpDraftService', () => {
 
   describe('generateDraftFromSuggestion', () => {
     it('creates followup_draft_created activity and returns id, subject, body, metadata', async () => {
-      const result = await service.generateDraftFromSuggestion('sug-1', {});
+      const result = await service.generateDraftFromSuggestion('sug-1', {}, 'tenant-1');
 
       expect(prisma.activity.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -100,7 +100,7 @@ describe('FollowUpDraftService', () => {
       (prisma.activity.findFirst as jest.Mock).mockResolvedValue(mockDraft);
       (prisma.activity.create as jest.Mock).mockResolvedValue({});
 
-      await service.markDraftSent('draft-1', { channel: 'email', notes: 'Sent via Gmail' });
+      await service.markDraftSent('draft-1', { channel: 'email', notes: 'Sent via Gmail' }, 'tenant-1');
 
       expect(prisma.activity.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -116,19 +116,19 @@ describe('FollowUpDraftService', () => {
           }),
         }),
       );
-      expect(workflow.updateLastActivityAt).toHaveBeenCalledWith('opp-1', expect.any(Date));
+      expect(workflow.updateLastActivityAt).toHaveBeenCalledWith('opp-1', expect.any(Date), 'tenant-1');
     });
 
     it('throws NotFoundException when draft not found', async () => {
       (prisma.activity.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.markDraftSent('missing', { channel: 'email' })).rejects.toThrow(NotFoundException);
+      await expect(service.markDraftSent('missing', { channel: 'email' }, 'tenant-1')).rejects.toThrow(NotFoundException);
     });
 
     it('throws BadRequestException when draft status is not DRAFT', async () => {
       (prisma.activity.findFirst as jest.Mock).mockResolvedValue({ ...mockDraft, metadata: { status: 'SENT' } });
 
-      await expect(service.markDraftSent('draft-1', { channel: 'email' })).rejects.toThrow(BadRequestException);
+      await expect(service.markDraftSent('draft-1', { channel: 'email' }, 'tenant-1')).rejects.toThrow(BadRequestException);
     });
   });
 });

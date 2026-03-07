@@ -10,24 +10,72 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  GLOBAL_ADMIN
+  ADMIN
+  USER
+  VIEWER
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model Tenant {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique
+  isActive     Boolean      @default(true)
+  status       TenantStatus @default(ACTIVE)
+  displayName  String?
+  logoUrl      String?
+  faviconUrl   String?
+  primaryColor String?
+  accentColor  String?
+  themeMode    String?
+  customDomain String?      @unique
+  subdomain    String?      @unique
+  settings     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  users               User[]
+  accounts            Account[]
+  contacts            Contact[]
+  leads               Lead[]
+  opportunities       Opportunity[]
+  opportunityContacts OpportunityContact[]
+  activities          Activity[]
+  attachments         Attachment[]
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+}
+
 model Account {
   id           String    @id @default(cuid())
+  tenantId      String
   name         String
   industry     String?
   website      String?
-  sourceLeadId String?  @unique
+  sourceLeadId String?   @unique
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sourceLead   Lead?     @relation("AccountSourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
   contacts     Contact[]
   opportunities Opportunity[]
 
+  @@index([tenantId])
+  @@index([tenantId, name])
   @@index([sourceLeadId])
 }
 
 model Contact {
   id           String   @id @default(cuid())
+  tenantId     String
   accountId    String
   firstName    String
   lastName     String
@@ -37,15 +85,18 @@ model Contact {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   account              Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
   sourceLead           Lead?                @relation("ContactSourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
   opportunityContacts  OpportunityContact[]
 
+  @@index([tenantId])
   @@index([sourceLeadId])
 }
 
 model Lead {
   id                   String    @id @default(cuid())
+  tenantId             String
   name                 String
   email                String
   company              String?
@@ -58,13 +109,17 @@ model Lead {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
+  tenant               Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   convertedAccount     Account?     @relation("AccountSourceLead")
   convertedContact     Contact?     @relation("ContactSourceLead")
   convertedOpportunity Opportunity? @relation("OpportunitySourceLead")
+
+  @@index([tenantId])
 }
 
 model Opportunity {
   id                  String    @id @default(cuid())
+  tenantId            String
   accountId           String
   name                String
   amount              Decimal?  @db.Decimal(14, 2)
@@ -83,11 +138,16 @@ model Opportunity {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  account            Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  sourceLead         Lead?                @relation("OpportunitySourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
-  owner              User                 @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account             Account             @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceLead          Lead?                @relation("OpportunitySourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
+  owner               User                 @relation(fields: [ownerId], references: [id], onDelete: Restrict)
   opportunityContacts OpportunityContact[]
 
+  @@index([tenantId])
+  @@index([tenantId, name])
+  @@index([tenantId, stage])
+  @@index([tenantId, ownerId])
   @@index([sourceLeadId])
   @@index([ownerId])
   @@index([stage, updatedAt, closeDate])
@@ -97,22 +157,26 @@ model Opportunity {
 
 model OpportunityContact {
   id            String   @id @default(cuid())
+  tenantId      String
   opportunityId String
   contactId     String
   role          String   // Champion | Economic Buyer | Technical Stakeholder | Other
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@unique([opportunityId, contactId])
+  @@index([tenantId])
   @@index([opportunityId])
   @@index([contactId])
 }
 
 model Activity {
   id         String    @id @default(cuid())
+  tenantId   String
   entityType String
   entityId   String
   type       String    // note, call, meeting, email, task, ai_summary, ai_deal_brief, ai_recommendation, ai_email_draft, stage_change, ...
@@ -122,28 +186,38 @@ model Activity {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, entityType, entityId])
   @@index([entityType, entityId])
   @@index([entityType, entityId, createdAt])
 }
 
 model User {
   id                 String    @id @default(cuid())
-  email              String    @unique
+  tenantId           String?
+  email              String
   passwordHash       String
-  role               String    @default("USER") // ADMIN, USER, VIEWER
+  role               UserRole  @default(USER)
   isActive           Boolean   @default(true)
   mustChangePassword Boolean   @default(false)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  refreshTokens       RefreshToken[]
+  tenant             Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  refreshTokens      RefreshToken[]
   passwordResetTokens PasswordResetToken[]
-  attachments         Attachment[]
+  attachments        Attachment[]
   ownedOpportunities Opportunity[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
 }
 
 model Attachment {
   id                String    @id @default(uuid())
+  tenantId          String
   entityType        String
   entityId          String
   fileName          String    // original name
@@ -157,35 +231,44 @@ model Attachment {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  uploadedByUser User @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  tenant          Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploadedByUser  User   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
 
+  @@index([tenantId])
+  @@index([tenantId, entityType, entityId])
   @@index([entityType, entityId, createdAt])
   @@index([uploadedByUserId])
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid())
-  userId    String
-  tokenHash String
-  revokedAt DateTime?
-  expiresAt DateTime
-  createdAt DateTime  @default(now())
+  id         String    @id @default(uuid())
+  tenantId   String
+  userId     String
+  tokenHash  String
+  revokedAt  DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@index([userId])
 }
 
 model PasswordResetToken {
   id         String    @id @default(cuid())
+  tenantId   String
   userId     String
   tokenHash  String    @unique
   expiresAt  DateTime
   usedAt     DateTime?
   createdAt  DateTime  @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@index([userId])
   @@index([expiresAt])
 }

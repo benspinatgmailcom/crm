@@ -16,9 +16,12 @@ import { Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
+import { requireTenantId } from '../common/tenant.util';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/constants';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ActivityService } from '../activity/activity.service';
+import type { User } from '@crm/db';
 
 const ENTITY_TYPES = ['account', 'contact', 'lead', 'opportunity'] as const;
 
@@ -50,7 +53,9 @@ export class UploadController {
     @Req() req: Request & { file?: { buffer: Buffer; originalname: string } },
     @Body('entityType') entityType: string,
     @Body('entityId') entityId: string,
+    @CurrentUser() user: User,
   ) {
+    const tenantId = requireTenantId(user);
     const file = req.file;
     if (!file) throw new BadRequestException('No file provided');
     if (!entityType || !entityId) {
@@ -70,6 +75,7 @@ export class UploadController {
 
     const relativePath = path.join(entityType, entityId, safeName).replace(/\\/g, '/');
     await this.activityService.createRaw({
+      tenantId,
       entityType: entityType as (typeof ENTITY_TYPES)[number],
       entityId,
       type: 'file_uploaded',

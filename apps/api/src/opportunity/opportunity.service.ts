@@ -25,7 +25,9 @@ export class OpportunityService {
   ) {}
 
   async create(dto: CreateOpportunityDto, currentUser: User): Promise<Opportunity> {
-    const account = await this.prisma.account.findUnique({ where: { id: dto.accountId } });
+    const tenantId = currentUser.tenantId;
+    if (tenantId == null) throw new ForbiddenException('Tenant context required');
+    const account = await this.prisma.account.findFirst({ where: { id: dto.accountId, tenantId } });
     if (!account) throw new NotFoundException(`Account ${dto.accountId} not found`);
 
     const isAdmin = currentUser.role === Role.ADMIN;
@@ -34,8 +36,8 @@ export class OpportunityService {
       throw new ForbiddenException('Only admins can set opportunity owner to another user');
     }
 
-    const owner = await this.prisma.user.findUnique({
-      where: { id: ownerId },
+    const owner = await this.prisma.user.findFirst({
+      where: { id: ownerId, tenantId },
       select: { id: true, isActive: true },
     });
     if (!owner) throw new NotFoundException(`User ${ownerId} not found`);
@@ -43,6 +45,7 @@ export class OpportunityService {
 
     const created = await this.prisma.opportunity.create({
       data: {
+        tenantId,
         accountId: dto.accountId,
         name: dto.name,
         amount: dto.amount != null ? dto.amount : undefined,
@@ -96,13 +99,15 @@ export class OpportunityService {
     forecastCategory: string;
     expectedRevenue: number | null;
   }>>> {
+    const tenantId = currentUser.tenantId;
+    if (tenantId == null) throw new ForbiddenException('Tenant context required');
     const isAdmin = currentUser.role === Role.ADMIN;
-    const ownerWhere: Prisma.OpportunityWhereInput = {};
+    const ownerWhere: Prisma.OpportunityWhereInput = { tenantId };
     const raw = ownerFilter?.toLowerCase();
     if (raw === 'me' || (!raw && !isAdmin)) {
       ownerWhere.ownerId = currentUser.id;
     } else if (raw === 'all' && isAdmin) {
-      // no filter
+      // no filter beyond tenantId
     } else if (raw && raw !== 'all') {
       if (raw !== currentUser.id && !isAdmin) {
         throw new ForbiddenException('Only admins can filter pipeline by another user');
@@ -213,7 +218,7 @@ export class OpportunityService {
     return result;
   }
 
-  async findAll(query: QueryOpportunityDto): Promise<
+  async findAll(query: QueryOpportunityDto, tenantId: string): Promise<
     PaginatedResult<
       Opportunity & {
         daysSinceLastTouch: number | null;
@@ -226,7 +231,7 @@ export class OpportunityService {
   > {
     const { page = 1, pageSize = 20, name, accountId, stage, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
-    const where: Prisma.OpportunityWhereInput = {};
+    const where: Prisma.OpportunityWhereInput = { tenantId };
     if (accountId) where.accountId = accountId;
     if (stage) where.stage = stage;
     if (name) where.name = { contains: name, mode: 'insensitive' };
@@ -272,7 +277,7 @@ export class OpportunityService {
     return { data, page, pageSize, total } as PaginatedResult<WithWorkflow>;
   }
 
-  async findOne(id: string): Promise<
+  async findOne(id: string, tenantId: string): Promise<
     Opportunity & {
       daysSinceLastTouch: number | null;
       daysInStage: number | null;
@@ -284,8 +289,8 @@ export class OpportunityService {
       expectedRevenue: { toString(): string } | null;
     }
   > {
-    const opportunity = await this.prisma.opportunity.findUnique({
-      where: { id },
+    const opportunity = await this.prisma.opportunity.findFirst({
+      where: { id, tenantId },
       select: {
         id: true,
         accountId: true,
@@ -340,7 +345,9 @@ export class OpportunityService {
   }
 
   async update(id: string, dto: UpdateOpportunityDto, currentUser: User): Promise<Opportunity> {
-    const current = await this.prisma.opportunity.findUnique({ where: { id } });
+    const tenantId = currentUser.tenantId;
+    if (tenantId == null) throw new ForbiddenException('Tenant context required');
+    const current = await this.prisma.opportunity.findFirst({ where: { id, tenantId } });
     if (!current) throw new NotFoundException(`Opportunity ${id} not found`);
 
     const isAdmin = currentUser.role === Role.ADMIN;
@@ -353,8 +360,8 @@ export class OpportunityService {
       if (!isAdmin && dto.ownerId !== currentUser.id) {
         throw new ForbiddenException('Only admins can assign an opportunity to another user');
       }
-      const newOwner = await this.prisma.user.findUnique({
-        where: { id: dto.ownerId },
+      const newOwner = await this.prisma.user.findFirst({
+        where: { id: dto.ownerId, tenantId },
         select: { id: true, isActive: true },
       });
       if (!newOwner) throw new NotFoundException(`User ${dto.ownerId} not found`);
@@ -417,6 +424,7 @@ export class OpportunityService {
         if (notesStr) payload.notes = notesStr;
       }
       await this.activityService.createRaw({
+        tenantId,
         entityType: 'opportunity',
         entityId: id,
         type: 'stage_change',
@@ -433,13 +441,13 @@ export class OpportunityService {
     return updated;
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findOne(id);
+  async remove(id: string, tenantId: string): Promise<void> {
+    await this.findOne(id, tenantId);
     await this.prisma.opportunity.delete({ where: { id } });
   }
 
-  async getDealTeam(opportunityId: string) {
-    await this.findOne(opportunityId);
+  async getDealTeam(opportunityId: string, tenantId: string) {
+    await this.findOne(opportunityId, tenantId);
     const rows = await this.prisma.opportunityContact.findMany({
       where: { opportunityId },
       include: {
@@ -460,14 +468,15 @@ export class OpportunityService {
     opportunityId: string,
     contactId: string,
     role: string,
+    tenantId: string,
   ) {
-    const opp = await this.prisma.opportunity.findUnique({
-      where: { id: opportunityId },
+    const opp = await this.prisma.opportunity.findFirst({
+      where: { id: opportunityId, tenantId },
       select: { id: true, accountId: true },
     });
     if (!opp) throw new NotFoundException(`Opportunity ${opportunityId} not found`);
-    const contact = await this.prisma.contact.findUnique({
-      where: { id: contactId },
+    const contact = await this.prisma.contact.findFirst({
+      where: { id: contactId, tenantId },
       select: { id: true, accountId: true },
     });
     if (!contact) throw new NotFoundException(`Contact ${contactId} not found`);
@@ -489,7 +498,7 @@ export class OpportunityService {
       });
     }
     return this.prisma.opportunityContact.create({
-      data: { opportunityId, contactId, role },
+      data: { tenantId, opportunityId, contactId, role },
       include: {
         contact: {
           select: { id: true, firstName: true, lastName: true, email: true, phone: true },
@@ -502,8 +511,9 @@ export class OpportunityService {
     opportunityId: string,
     contactId: string,
     role: string,
+    tenantId: string,
   ) {
-    await this.findOne(opportunityId);
+    await this.findOne(opportunityId, tenantId);
     const oc = await this.prisma.opportunityContact.findUnique({
       where: { opportunityId_contactId: { opportunityId, contactId } },
     });
@@ -519,8 +529,8 @@ export class OpportunityService {
     });
   }
 
-  async removeDealTeamMember(opportunityId: string, contactId: string): Promise<void> {
-    await this.findOne(opportunityId);
+  async removeDealTeamMember(opportunityId: string, contactId: string, tenantId: string): Promise<void> {
+    await this.findOne(opportunityId, tenantId);
     const oc = await this.prisma.opportunityContact.findUnique({
       where: { opportunityId_contactId: { opportunityId, contactId } },
     });

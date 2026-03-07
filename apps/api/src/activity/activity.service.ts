@@ -20,7 +20,7 @@ export class ActivityService {
     private readonly forecastService: OpportunityForecastService,
   ) {}
 
-  async create(dto: CreateActivityDto): Promise<Activity> {
+  async create(dto: CreateActivityDto, tenantId: string): Promise<Activity> {
     const PayloadDto = PAYLOAD_DTO_MAP[dto.type];
     if (PayloadDto) {
       const payloadObj = (dto.payload ?? {}) as Record<string, unknown>;
@@ -34,6 +34,7 @@ export class ActivityService {
 
     const activity = await this.prisma.activity.create({
       data: {
+        tenantId,
         entityType: dto.entityType,
         entityId: dto.entityId,
         type: dto.type,
@@ -41,7 +42,7 @@ export class ActivityService {
       },
     });
     if (dto.entityType === 'opportunity' && isTouchActivityType(dto.type)) {
-      await this.workflow.updateLastActivityAt(dto.entityId, activity.createdAt);
+      await this.workflow.updateLastActivityAt(dto.entityId, activity.createdAt, tenantId);
       await this.forecastService.recomputeForecast(dto.entityId).catch(() => {});
     }
     return activity;
@@ -49,6 +50,7 @@ export class ActivityService {
 
   /** Create activity without payload validation (e.g. for AI-generated ai_summary) */
   async createRaw(data: {
+    tenantId: string;
     entityType: string;
     entityId: string;
     type: string;
@@ -56,6 +58,7 @@ export class ActivityService {
   }): Promise<Activity> {
     const activity = await this.prisma.activity.create({
       data: {
+        tenantId: data.tenantId,
         entityType: data.entityType,
         entityId: data.entityId,
         type: data.type,
@@ -63,16 +66,16 @@ export class ActivityService {
       },
     });
     if (data.entityType === 'opportunity' && isTouchActivityType(data.type)) {
-      await this.workflow.updateLastActivityAt(data.entityId, activity.createdAt);
+      await this.workflow.updateLastActivityAt(data.entityId, activity.createdAt, data.tenantId);
       await this.forecastService.recomputeForecast(data.entityId).catch(() => {});
     }
     return activity;
   }
 
-  async findAll(query: QueryActivityDto): Promise<PaginatedResult<Activity>> {
+  async findAll(query: QueryActivityDto, tenantId: string): Promise<PaginatedResult<Activity>> {
     const { page = 1, pageSize = 20, entityType, entityId, type, sortBy = 'createdAt', sortDir = 'desc' } = query;
 
-    const where: Prisma.ActivityWhereInput = { deletedAt: null };
+    const where: Prisma.ActivityWhereInput = { tenantId, deletedAt: null };
     if (entityType) where.entityType = entityType;
     if (entityId) where.entityId = entityId;
     if (type) {
@@ -92,6 +95,7 @@ export class ActivityService {
         take: pageSize,
         select: {
           id: true,
+          tenantId: true,
           entityType: true,
           entityId: true,
           type: true,
@@ -108,11 +112,12 @@ export class ActivityService {
     return { data, page, pageSize, total };
   }
 
-  async findOne(id: string): Promise<Activity> {
+  async findOne(id: string, tenantId: string): Promise<Activity> {
     const activity = await this.prisma.activity.findFirst({
-      where: { id, deletedAt: null },
+      where: { id, tenantId, deletedAt: null },
       select: {
         id: true,
+        tenantId: true,
         entityType: true,
         entityId: true,
         type: true,
@@ -127,8 +132,8 @@ export class ActivityService {
     return activity as Activity;
   }
 
-  async update(id: string, dto: UpdateActivityDto): Promise<Activity> {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateActivityDto, tenantId: string): Promise<Activity> {
+    await this.findOne(id, tenantId);
     return await this.prisma.activity.update({
       where: { id },
       data: {
@@ -138,8 +143,8 @@ export class ActivityService {
     });
   }
 
-  async remove(id: string): Promise<void> {
-    const activity = await this.prisma.activity.findUnique({ where: { id } });
+  async remove(id: string, tenantId: string): Promise<void> {
+    const activity = await this.prisma.activity.findFirst({ where: { id, tenantId } });
     if (!activity) throw new NotFoundException(`Activity ${id} not found`);
     await this.prisma.activity.update({
       where: { id },

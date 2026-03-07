@@ -54,7 +54,7 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
   async refresh(
     @Body() dto: RefreshDto,
-  ): Promise<AuthTokens & { user: { id: string; email: string; role: string } }> {
+  ): Promise<AuthTokens & { user: { id: string; email: string; role: string; tenantId: string | null } }> {
     return this.authService.refresh(dto.refreshToken);
   }
 
@@ -87,8 +87,11 @@ export class AuthController {
 
   @Get('me')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current user' })
-  @ApiResponse({ status: 200, description: 'Current user' })
+  @ApiOperation({ summary: 'Get current user and tenant branding' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns { user, tenant }. tenant is null for platform users.',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async me(@CurrentUser('id') userId: string) {
     return this.authService.me(userId);

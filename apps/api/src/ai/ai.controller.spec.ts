@@ -35,22 +35,25 @@ describe('AiController', () => {
 
   describe('POST /ai/deal-brief/:opportunityId', () => {
     it('ADMIN/USER: delegates to AiDealBriefService and returns result', async () => {
+      const user = { id: 'user-1', tenantId: 'tenant-1', email: 'u@test.com', role: 'USER' } as any;
       const result = await controller.generateDealBrief(
         'opp-1',
-        'user-1',
+        user,
         undefined,
       );
 
       expect(aiDealBriefService.generateDealBrief).toHaveBeenCalledWith(
         'opp-1',
         'user-1',
+        'tenant-1',
         { forceRefresh: false, lookbackDays: 30 },
       );
       expect(result).toEqual(mockDealBriefResponse);
     });
 
     it('passes forceRefresh and lookbackDays from body to service', async () => {
-      await controller.generateDealBrief('opp-2', 'user-2', {
+      const user = { id: 'user-2', tenantId: 'tenant-1', email: 'u2@test.com', role: 'USER' } as any;
+      await controller.generateDealBrief('opp-2', user, {
         forceRefresh: true,
         lookbackDays: 14,
       });
@@ -58,6 +61,7 @@ describe('AiController', () => {
       expect(aiDealBriefService.generateDealBrief).toHaveBeenCalledWith(
         'opp-2',
         'user-2',
+        'tenant-1',
         { forceRefresh: true, lookbackDays: 14 },
       );
     });

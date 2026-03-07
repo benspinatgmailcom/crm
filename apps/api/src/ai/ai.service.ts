@@ -57,11 +57,12 @@ export class AiService {
     private readonly aiAdapter: AiAdapter,
   ) {}
 
-  async generateSummary(dto: GenerateSummaryDto): Promise<Activity> {
+  async generateSummary(dto: GenerateSummaryDto, tenantId: string): Promise<Activity> {
     const { entityType, entityId, days = 30 } = dto;
     const context = await this.contextService.buildContextPack(
       entityType,
       entityId,
+      tenantId,
       days,
       50,
     );
@@ -93,6 +94,7 @@ All fields except "text" are optional. Keep it concise and actionable.`;
 
     const payload = this.parseSummaryResponse(raw, days);
     return this.activityService.createRaw({
+      tenantId,
       entityType,
       entityId,
       type: 'ai_summary',
@@ -104,11 +106,12 @@ All fields except "text" are optional. Keep it concise and actionable.`;
     });
   }
 
-  async generateNextActions(dto: NextActionsDto): Promise<NextActionsResponse> {
+  async generateNextActions(dto: NextActionsDto, tenantId: string): Promise<NextActionsResponse> {
     const { entityType, entityId, count = 5 } = dto;
     const context = await this.contextService.buildContextPack(
       entityType,
       entityId,
+      tenantId,
       30,
       50,
     );
@@ -144,6 +147,7 @@ Return up to ${count} actions, ordered by priority (1 first).`;
 
     const parsed = this.parseNextActionsResponse(raw);
     const activity = await this.activityService.createRaw({
+      tenantId,
       entityType,
       entityId,
       type: 'ai_recommendation',
@@ -158,7 +162,7 @@ Return up to ${count} actions, ordered by priority (1 first).`;
     return { activityId: activity.id, actions: parsed.actions };
   }
 
-  async generateDraftEmail(dto: DraftEmailDto): Promise<DraftEmailResult> {
+  async generateDraftEmail(dto: DraftEmailDto, tenantId: string): Promise<DraftEmailResult> {
     const {
       entityType,
       entityId,
@@ -172,6 +176,7 @@ Return up to ${count} actions, ordered by priority (1 first).`;
     const context = await this.contextService.buildEmailContextPack(
       entityType,
       entityId,
+      tenantId,
       recipientEmail,
       additionalContext,
     );
@@ -215,6 +220,7 @@ All fields except subject and body are optional. Keep the email concise and prof
     if (!parsed) throw new BadRequestException('AI returned invalid JSON for draft email');
 
     const activity = await this.activityService.createRaw({
+      tenantId,
       entityType,
       entityId,
       type: 'ai_email_draft',
@@ -241,9 +247,10 @@ All fields except subject and body are optional. Keep the email concise and prof
 
   async logDraftEmailAsOutbound(
     activityId: string,
-    toEmail?: string,
+    toEmail: string | undefined,
+    tenantId: string,
   ): Promise<Activity> {
-    const draft = await this.activityService.findOne(activityId);
+    const draft = await this.activityService.findOne(activityId, tenantId);
     if (draft.type !== 'ai_email_draft') {
       throw new BadRequestException('Activity is not an AI email draft');
     }
@@ -258,6 +265,7 @@ All fields except subject and body are optional. Keep the email concise and prof
     if (!recipient) recipient = '(recipient not specified)';
 
     return this.activityService.createRaw({
+      tenantId,
       entityType: draft.entityType,
       entityId: draft.entityId,
       type: 'email',
@@ -300,8 +308,8 @@ All fields except subject and body are optional. Keep the email concise and prof
     }
   }
 
-  async convertToTask(activityId: string, actionIndex: number): Promise<Activity> {
-    const activity = await this.activityService.findOne(activityId);
+  async convertToTask(activityId: string, actionIndex: number, tenantId: string): Promise<Activity> {
+    const activity = await this.activityService.findOne(activityId, tenantId);
     if (activity.type !== 'ai_recommendation') {
       throw new BadRequestException('Activity is not an AI recommendation');
     }
@@ -313,6 +321,7 @@ All fields except subject and body are optional. Keep the email concise and prof
     const action = actions[actionIndex] as NextAction;
 
     return this.activityService.createRaw({
+      tenantId,
       entityType: activity.entityType,
       entityId: activity.entityId,
       type: 'task',

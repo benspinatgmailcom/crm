@@ -16,15 +16,14 @@ import {
   Activity,
   ListTodo,
   MessageSquarePlus,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
-import { isAdmin } from "@/lib/roles";
+import { isAdmin, isGlobalAdmin } from "@/lib/roles";
 import { ApiStatus } from "@/components/api-status";
 import { GlobalSearch } from "@/components/global-search";
 import { QuickCreateDropdown } from "@/components/quick-create-dropdown";
 import { env } from "@/lib/env";
-
-const logoUrl = env.NEXT_PUBLIC_LOGO_URL || null;
 
 const navItems: Array<{
   href: string;
@@ -50,9 +49,11 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, isLoading, user, logout } = useAuth();
+  const { isAuthenticated, isLoading, user, tenant, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  // Tenant branding overrides env default; supports relative paths (e.g. /tenants/acme/logo.svg from public/) or absolute URLs
+  const logoUrl = tenant?.logoUrl ?? (env.NEXT_PUBLIC_LOGO_URL || null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -120,6 +121,19 @@ export default function DashboardLayout({
                 </Link>
               );
             })}
+            {isGlobalAdmin(user?.role) && (
+              <Link
+                href="/platform"
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-1/60 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${
+                  pathname?.startsWith("/platform")
+                    ? "bg-accent-1/15 text-accent-1"
+                    : "text-white/80 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden />
+                Platform
+              </Link>
+            )}
             {isAdmin(user?.role) && (
               <Link
                 href="/dev"

@@ -31,29 +31,29 @@ export class TasksService {
     query: QueryTasksDto,
     currentUserId: string,
     isAdmin: boolean,
+    tenantId: string,
   ): Promise<PaginatedResult<TaskListItem>> {
     const { page = 1, pageSize = 20, assignee = 'me', status = 'open', overdue, dueToday, dueThisWeek } = query;
 
-    const where: Prisma.ActivityWhereInput = { type: 'task', deletedAt: null };
+    const where: Prisma.ActivityWhereInput = { tenantId, type: 'task', deletedAt: null };
 
     if (assignee === 'me') {
       const myOppIds = await this.prisma.opportunity.findMany({
-        where: { ownerId: currentUserId },
+        where: { tenantId, ownerId: currentUserId },
         select: { id: true },
       }).then((r) => r.map((o) => o.id));
       where.OR = [{ entityType: 'opportunity', entityId: { in: myOppIds } }];
     } else if (assignee === 'all') {
-      // no owner filter
+      // no owner filter (still tenant-scoped via where.tenantId)
     } else if (isAdmin && assignee) {
       const oppIds = await this.prisma.opportunity.findMany({
-        where: { ownerId: assignee },
+        where: { tenantId, ownerId: assignee },
         select: { id: true },
       }).then((r) => r.map((o) => o.id));
       where.OR = [{ entityType: 'opportunity', entityId: { in: oppIds } }];
     } else {
-      // non-admin with specific user - treat as me
       const myOppIds = await this.prisma.opportunity.findMany({
-        where: { ownerId: currentUserId },
+        where: { tenantId, ownerId: currentUserId },
         select: { id: true },
       }).then((r) => r.map((o) => o.id));
       where.OR = [{ entityType: 'opportunity', entityId: { in: myOppIds } }];
@@ -110,7 +110,7 @@ export class TasksService {
     if (activities.length > 0) {
       const oppIds = [...new Set(activities.filter((a) => a.entityType === 'opportunity').map((a) => a.entityId))];
       const opportunities = await this.prisma.opportunity.findMany({
-        where: { id: { in: oppIds } },
+        where: { tenantId, id: { in: oppIds } },
         select: { id: true, accountId: true, ownerId: true, name: true, owner: { select: { email: true } } },
       });
       const oppMap = new Map(opportunities.map((o) => [o.id, o]));
@@ -133,14 +133,14 @@ export class TasksService {
 
       const [leads, accounts, contacts] = await Promise.all([
         leadIds.length > 0
-          ? this.prisma.lead.findMany({ where: { id: { in: leadIds } }, select: { id: true, name: true } })
+          ? this.prisma.lead.findMany({ where: { tenantId, id: { in: leadIds } }, select: { id: true, name: true } })
           : [],
         accountIds.length > 0
-          ? this.prisma.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, name: true } })
+          ? this.prisma.account.findMany({ where: { tenantId, id: { in: accountIds } }, select: { id: true, name: true } })
           : [],
         contactIds.length > 0
           ? this.prisma.contact.findMany({
-              where: { id: { in: contactIds } },
+              where: { tenantId, id: { in: contactIds } },
               select: { id: true, firstName: true, lastName: true },
             })
           : [],
@@ -214,9 +214,9 @@ export class TasksService {
     };
   }
 
-  async update(id: string, dto: UpdateTaskDto): Promise<TaskListItem> {
+  async update(id: string, dto: UpdateTaskDto, tenantId: string): Promise<TaskListItem> {
     const activity = await this.prisma.activity.findFirst({
-      where: { id, type: 'task', deletedAt: null },
+      where: { id, tenantId, type: 'task', deletedAt: null },
       select: { id: true, entityType: true, entityId: true, type: true, payload: true, metadata: true, createdAt: true, updatedAt: true },
     });
     if (!activity) throw new NotFoundException(`Task ${id} not found`);

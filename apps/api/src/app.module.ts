@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
+import { TenantStatusGuard } from './auth/guards/tenant-status.guard';
 import { DevModule } from './dev/dev.module';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -22,6 +23,7 @@ import { EmailModule } from './email/email.module';
 import { MetabaseModule } from './metabase/metabase.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './users/users.module';
+import { PlatformModule } from './platform/platform.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { TasksModule } from './tasks/tasks.module';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
@@ -44,6 +46,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
     EmailModule,
     MetabaseModule,
     UsersModule,
+    PlatformModule,
     DashboardModule,
     TasksModule,
     DevModule,
@@ -53,6 +56,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
     AppService,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: TenantStatusGuard },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
 })

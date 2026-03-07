@@ -11,11 +11,17 @@ export default function HomePage() {
   useEffect(() => {
     if (isLoading) return;
     if (isAuthenticated) {
-      router.replace(user?.mustChangePassword ? "/change-password" : "/accounts");
+      if (user?.mustChangePassword) {
+        router.replace("/change-password");
+      } else if (user?.role === "GLOBAL_ADMIN") {
+        router.replace("/platform");
+      } else {
+        router.replace("/accounts");
+      }
     } else {
       router.replace("/login");
     }
-  }, [isAuthenticated, isLoading, user?.mustChangePassword, router]);
+  }, [isAuthenticated, isLoading, user?.mustChangePassword, user?.role, router]);
 
   return (
     <main className="flex min-h-screen items-center justify-center">
